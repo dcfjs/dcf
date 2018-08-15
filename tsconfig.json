@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "importHelpers": true,
+    "target": "esnext",
+    "sourceMap": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+
+    "lib": ["esnext"],
+    "types": ["node"]
+  },
+  "exclude": ["node_modules"],
+  "compileOnSave": false
+}
