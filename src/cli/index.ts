@@ -1,3 +1,4 @@
+import { LocalClient } from '../client/LocalClient';
 import { createContext, runInContext, Context } from 'vm';
 import * as readline from 'readline';
 
@@ -7,16 +8,21 @@ const rl = readline.createInterface({
 });
 rl.setPrompt('> ');
 
-function initContext(): Context {
+const client = new LocalClient();
+
+async function initContext(): Promise<Context> {
+  await client.init();
   return {
     VERSION: require('../../package.json').version,
     exit,
+    dcf: client,
   };
 }
 
 function exit() {
   setImmediate(() => {
     rl.pause();
+    client.dispose();
   });
   console.log('Bye.');
 }
@@ -35,8 +41,8 @@ async function runInContextAsync(line: string, context: Context) {
   }
 }
 
-function main() {
-  const context = initContext();
+async function main() {
+  const context = await initContext();
   createContext(context);
   rl.prompt();
   rl.on('line', line => {
