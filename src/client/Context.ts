@@ -71,6 +71,24 @@ class RDD<T> {
     });
     return new RDD<T1>(this.context, generateTask);
   }
+  filter(
+    func: ((v: T) => boolean) | SerializeFunction,
+    env?: FunctionEnv,
+  ): RDD<T> {
+    const serializedFunc =
+      typeof func === 'function' ? serialize(func, env) : func;
+
+    const generateTask = async (): Promise<Request> => ({
+      type: MAP,
+      payload: {
+        subRequest: await this.generateTask(this),
+        func: serialize((partition: any[]) => partition.filter(func as any), {
+          func: serializedFunc,
+        }),
+      },
+    });
+    return new RDD<T>(this.context, generateTask);
+  }
 }
 
 export class Context {
