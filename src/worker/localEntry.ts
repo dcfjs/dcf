@@ -9,12 +9,21 @@ if (!process.send) {
 const queue: Request[] = [];
 
 async function processNextRequest() {
-  const m = await processRequest(queue[0]);
-  if (process.send) {
-    process.send({
-      ok: true,
-      payload: m,
-    });
+  try {
+    const m = await processRequest(queue[0]);
+    if (process.send) {
+      process.send({
+        ok: true,
+        payload: m,
+      });
+    }
+  } catch (e) {
+    if (process.send) {
+      process.send({
+        ok: false,
+        message: e.message,
+      });
+    }
   }
   queue.shift();
   if (queue.length > 0) {
