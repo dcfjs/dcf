@@ -97,23 +97,15 @@ export class Context {
     this.client = c;
   }
 
-  parallelize<T>(
-    arr: T[],
-    {
-      type = 'memory',
-      partitionCount = this.client.workerCount(),
-    }: {
-      type?: PartitionType;
-      partitionCount?: number;
-    } = {},
-  ): RDD<T> {
+  parallelize<T>(arr: T[], numSlice?: number): RDD<T> {
+    numSlice = numSlice || this.client.workerCount();
     const args: T[][] = [];
 
-    const rest = arr.length % partitionCount;
-    const eachCount = (arr.length - rest) / partitionCount;
+    const rest = arr.length % numSlice;
+    const eachCount = (arr.length - rest) / numSlice;
 
     let index = 0;
-    for (let i = 0; i < partitionCount; i++) {
+    for (let i = 0; i < numSlice; i++) {
       const subCount = i < rest ? eachCount + 1 : eachCount;
       const end = index + subCount;
       args.push(arr.slice(index, end));
@@ -125,10 +117,10 @@ export class Context {
       (): Request => ({
         type: CREATE_RDD,
         payload: {
-          partitionCount,
+          partitionCount: numSlice,
           creator: serialize((arg: T[]) => arg),
           args: args,
-          type,
+          type: 'memory',
         },
       }),
     );
