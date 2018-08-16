@@ -54,6 +54,46 @@ class RDD<T> {
       },
     });
   }
+  async max(): Promise<number> {
+    return this.context.client.request({
+      type: REDUCE,
+      payload: {
+        subRequest: await this.generateTask(this),
+        partitionFunc: serialize((data: any[]) =>
+          data.reduce(
+            (a, b) => (a !== null && (b === null || a > b) ? a : b),
+            null,
+          ),
+        ),
+        finalFunc: serialize((result: any[]) =>
+          result.reduce(
+            (a, b) => (a !== null && (b === null || a > b) ? a : b),
+            null,
+          ),
+        ),
+      },
+    });
+  }
+  async min(): Promise<number> {
+    return this.context.client.request({
+      type: REDUCE,
+      payload: {
+        subRequest: await this.generateTask(this),
+        partitionFunc: serialize((data: any[]) =>
+          data.reduce(
+            (a, b) => (a !== null && (b === null || a < b) ? a : b),
+            null,
+          ),
+        ),
+        finalFunc: serialize((result: any[]) =>
+          result.reduce(
+            (a, b) => (a !== null && (b === null || a < b) ? a : b),
+            null,
+          ),
+        ),
+      },
+    });
+  }
   map<T1>(
     func: ((v: T) => T1) | SerializeFunction,
     env?: FunctionEnv,
