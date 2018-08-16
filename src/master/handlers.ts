@@ -86,7 +86,7 @@ registerHandler(
     context: MasterServer,
   ) => {
     const workerCount = context.workers.length;
-    partitionCount = partitionCount || workerCount;
+    partitionCount = partitionCount == null ? workerCount : partitionCount;
     const rest = partitionCount % workerCount;
     const eachCount = (partitionCount - rest) / workerCount;
 

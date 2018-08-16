@@ -49,7 +49,7 @@ class RDD<T> {
         subRequest: await this.generateTask(this),
         partitionFunc: serialize((data: any[]) => data.length),
         finalFunc: serialize((result: number[]) =>
-          result.reduce((a, b) => a + b),
+          result.reduce((a, b) => a + b, 0),
         ),
       },
     });
@@ -95,6 +95,18 @@ export class Context {
   client: Client;
   constructor(c: Client) {
     this.client = c;
+  }
+
+  emptyRDD(): RDD<never> {
+    return new RDD<never>(
+      this,
+      (): Request => ({
+        type: CREATE_RDD,
+        payload: {
+          partitionCount: 0,
+        },
+      }),
+    );
   }
 
   parallelize<T>(arr: T[], numSlice?: number): RDD<T> {
