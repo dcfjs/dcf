@@ -4,7 +4,7 @@ import { REDUCE, CREATE_RDD, MAP } from './../master/handlers';
 import { Client, Request } from './Client';
 import { serialize } from '../common/SerializeFunction';
 
-type ResponseFactory<T> = (rdd: RDD<T>) => Request;
+type ResponseFactory<T> = (rdd: RDD<T>) => Request | Promise<Request>;
 
 class RDD<T> {
   context: Context;
@@ -15,6 +15,33 @@ class RDD<T> {
     this.generateTask = generateTask;
   }
 
+  async take(count: number): Promise<T[]> {
+    return this.context.client.request({
+      type: REDUCE,
+      payload: {
+        subRequest: await this.generateTask(this),
+        partitionFunc: serialize((data: any[]) => data.slice(0, count), {
+          count,
+        }),
+        finalFunc: serialize(
+          (results: any[][]) => {
+            let total = 0;
+            const ret: any[][] = [];
+            for (const result of results) {
+              if (total + result.length >= count) {
+                ret.push(result.slice(0, count - total));
+                break;
+              }
+              ret.push(result);
+              total += result.length;
+            }
+            return ([] as any[]).concat(...ret);
+          },
+          { count },
+        ),
+      },
+    });
+  }
   async count(): Promise<number> {
     return this.context.client.request({
       type: REDUCE,
@@ -33,10 +60,10 @@ class RDD<T> {
   ): RDD<T1> {
     const serializedFunc =
       typeof func === 'function' ? serialize(func, env) : func;
-    const generateTask = (): Request => ({
+    const generateTask = async (): Promise<Request> => ({
       type: MAP,
       payload: {
-        subRequest: this.generateTask(this),
+        subRequest: await this.generateTask(this),
         func: serialize((partition: any[]) => partition.map(func as any), {
           func: serializedFunc,
         }),
