@@ -6,6 +6,7 @@ export const INIT = '@@worker/init';
 export const EXIT = '@@worker/exit';
 
 export const CREATE_PARTITION = '@@worker/createPartition';
+export const MAP = '@@worker/map';
 export const REDUCE = '@@worker/reduce';
 export const RELEASE = '@@worker/release';
 
@@ -24,6 +25,12 @@ registerHandler(EXIT, () => {
 const partitions: { [key: string]: any[] } = {};
 let idCounter = 0;
 
+function saveNewPartition(data: any[]) {
+  const id = `rdd-${++idCounter}`;
+  partitions[id] = data;
+  return id;
+}
+
 registerHandler(
   CREATE_PARTITION,
   ({
@@ -40,11 +47,17 @@ registerHandler(
     const func = deserialize(creator);
     const ret: string[] = [];
     for (let i = 0; i < count; i++) {
-      const id = `rdd-${++idCounter}`;
-      partitions[id] = func(args[i]);
-      ret.push(id);
+      ret.push(saveNewPartition(func(args[i])));
     }
     return ret;
+  },
+);
+
+registerHandler(
+  MAP,
+  ({ ids, func }: { ids: string[]; func: SerializeFunction }) => {
+    const f = deserialize(func);
+    return ids.map(id => saveNewPartition(f(partitions[id])));
   },
 );
 

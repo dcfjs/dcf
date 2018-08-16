@@ -2,12 +2,17 @@ import { RELEASE } from './../worker/handlers';
 import { MasterServer } from './MasterServer';
 import { registerHandler } from '../common/handler';
 import { Request } from '../client/Client';
-import { SerializeFunction, deserialize } from '../common/SerializeFunction';
+import {
+  SerializeFunction,
+  deserialize,
+  serialize,
+} from '../common/SerializeFunction';
 import * as workerActions from '../worker/handlers';
 import { WorkerClient } from '../worker/WorkerClient';
 import { PartitionType } from '../common/types';
 
 export const CREATE_RDD = '@@master/createRDD';
+export const MAP = '@@master/map';
 export const REDUCE = '@@master/reduce';
 
 export const LOAD_CACHE = '@@master/loadCache';
@@ -22,14 +27,15 @@ class Partition {
   }
 }
 
+type TaskRecord = {
+  worker: WorkerClient;
+  ids: string[];
+  indecies: number[];
+};
+
 function groupByWorker(partitions: Partition[]) {
-  type Record = {
-    worker: WorkerClient;
-    ids: string[];
-    indecies: number[];
-  };
-  const ret: Record[] = [];
-  const map: { [key: string]: Record } = {};
+  const ret: TaskRecord[] = [];
+  const map: { [key: string]: TaskRecord } = {};
   let index = 0;
   for (const partition of partitions) {
     const { worker } = partition;
@@ -49,6 +55,18 @@ function groupByWorker(partitions: Partition[]) {
     record.indecies.push(index++);
   }
   return ret;
+}
+
+function flatWorkerResult(tasks: TaskRecord[], resp: any[][]) {
+  const results = [];
+  for (let i = 0; i < tasks.length; i++) {
+    const result = resp[i] as any[];
+    const task = tasks[i];
+    for (let j = 0; j < result.length; j++) {
+      results[task.indecies[j]] = result[j];
+    }
+  }
+  return results;
 }
 
 registerHandler(
@@ -104,6 +122,50 @@ registerHandler(
 );
 
 registerHandler(
+  MAP,
+  async (
+    {
+      subRequest,
+      func,
+    }: {
+      subRequest: Request;
+      func: SerializeFunction;
+    },
+    context: MasterServer,
+  ) => {
+    const subPartitions: Partition[] = await context.processRequest(subRequest);
+    const tasks = groupByWorker(subPartitions);
+
+    const partitions = flatWorkerResult(
+      tasks,
+      await Promise.all(
+        tasks.map(v =>
+          v.worker.processRequest({
+            type: workerActions.MAP,
+            payload: {
+              func,
+              ids: v.ids,
+            },
+          }),
+        ),
+      ),
+    ).map((v, i) => new Partition(subPartitions[i].worker, v));
+
+    if (subRequest.type !== LOAD_CACHE) {
+      await Promise.all(
+        tasks.map(v =>
+          v.worker.processRequest({
+            type: workerActions.RELEASE,
+            payload: v.ids,
+          }),
+        ),
+      );
+    }
+    return partitions;
+  },
+);
+
+registerHandler(
   REDUCE,
   async (
     {
@@ -121,26 +183,20 @@ registerHandler(
 
     const tasks = groupByWorker(partitions);
 
-    const resp = await Promise.all(
-      tasks.map(v =>
-        v.worker.processRequest({
-          type: workerActions.REDUCE,
-          payload: {
-            func: partitionFunc,
-            ids: v.ids,
-          },
-        }),
+    const results = flatWorkerResult(
+      tasks,
+      await Promise.all(
+        tasks.map(v =>
+          v.worker.processRequest({
+            type: workerActions.REDUCE,
+            payload: {
+              func: partitionFunc,
+              ids: v.ids,
+            },
+          }),
+        ),
       ),
     );
-
-    const results = [];
-    for (let i = 0; i < tasks.length; i++) {
-      const result = resp[i] as any[];
-      const task = tasks[i];
-      for (let j = 0; j < result.length; j++) {
-        results[task.indecies[j]] = result[j];
-      }
-    }
 
     if (subRequest.type !== LOAD_CACHE) {
       await Promise.all(

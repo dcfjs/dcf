@@ -1,23 +1,18 @@
+import { SerializeFunction, FunctionEnv } from './../common/SerializeFunction';
 import { PartitionType } from './../common/types';
-import { REDUCE, CREATE_RDD } from './../master/handlers';
+import { REDUCE, CREATE_RDD, MAP } from './../master/handlers';
 import { Client, Request } from './Client';
 import { serialize } from '../common/SerializeFunction';
 
-type ResponseFactory<T> = (rdd: RDD<T>) => Request | Promise<Request>;
+type ResponseFactory<T> = (rdd: RDD<T>) => Request;
 
 class RDD<T> {
   context: Context;
   generateTask: ResponseFactory<T>;
-  dependencies: RDD<any>[];
 
-  constructor(
-    context: Context,
-    generateTask: ResponseFactory<T>,
-    dependencies: RDD<any>[] = [],
-  ) {
+  constructor(context: Context, generateTask: ResponseFactory<T>) {
     this.context = context;
     this.generateTask = generateTask;
-    this.dependencies = dependencies;
   }
 
   async count(): Promise<number> {
@@ -25,12 +20,29 @@ class RDD<T> {
       type: REDUCE,
       payload: {
         subRequest: await this.generateTask(this),
-        partitionFunc: serialize((partition: any[]) => partition.length),
+        partitionFunc: serialize((data: any[]) => data.length),
         finalFunc: serialize((result: number[]) =>
           result.reduce((a, b) => a + b),
         ),
       },
     });
+  }
+  map<T1>(
+    func: ((v: T) => T1) | SerializeFunction,
+    env?: FunctionEnv,
+  ): RDD<T1> {
+    const serializedFunc =
+      typeof func === 'function' ? serialize(func, env) : func;
+    const generateTask = (): Request => ({
+      type: MAP,
+      payload: {
+        subRequest: this.generateTask(this),
+        func: serialize((partition: any[]) => partition.map(func as any), {
+          func: serializedFunc,
+        }),
+      },
+    });
+    return new RDD<T1>(this.context, generateTask);
   }
 }
 
