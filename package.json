@@ -5,7 +5,8 @@
   "repository": "git@github.com:tdzl2003/dcf.git",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node src/cli/index.ts"
+    "start": "ts-node src/cli/index.ts",
+    "ts-node": "ts-node"
   },
   "devDependencies": {
     "ts-node": "^7.0.1",
