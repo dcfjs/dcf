@@ -1,6 +1,7 @@
 import * as cp from 'child_process';
 import { Request, Response } from '../client';
 import { INIT, EXIT } from './handlers';
+import { WorkerClient } from './WorkerClient';
 
 const entryScript = require.resolve('./localEntry');
 const isType = /\.ts$/.test(entryScript);
@@ -12,14 +13,15 @@ function createWorker() {
   });
 }
 
-export class LocalWorker {
-  id: string;
+export class LocalWorker implements WorkerClient {
   worker: cp.ChildProcess | null = null;
   sequence: Function[][] = [];
   waitExit?: Function;
+  id: string;
   constructor(id: string) {
     this.id = id;
   }
+
   async init(): Promise<void> {
     if (this.worker != null) {
       throw new Error('Worker already inited.');
@@ -39,13 +41,14 @@ export class LocalWorker {
       return;
     }
     if (r.ok) {
-      msg[0](r);
+      msg[0](r.payload);
     } else {
-      msg[1](new Error(r.payload));
+      msg[1](new Error(r.message));
     }
   };
   onExit = (code: number) => {
     if (code !== 0) {
+      // Crash master process
       throw new Error('Worker exit abnormally.');
     }
     if (this.waitExit) {
@@ -62,8 +65,8 @@ export class LocalWorker {
       this.worker.send(m);
     });
   }
-  dispose() {
-    return new Promise(resolve => {
+  async dispose() {
+    await new Promise(resolve => {
       if (this.worker == null) {
         throw new Error('Worker not inited.');
       }

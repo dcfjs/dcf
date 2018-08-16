@@ -11,7 +11,10 @@ const queue: Request[] = [];
 async function processNextRequest() {
   const m = await processRequest(queue[0]);
   if (process.send) {
-    process.send(m);
+    process.send({
+      ok: true,
+      payload: m,
+    });
   }
   queue.shift();
   if (queue.length > 0) {

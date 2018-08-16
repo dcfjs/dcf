@@ -1,6 +1,7 @@
 import { LocalClient } from '../client/LocalClient';
-import { createContext, runInContext, Context } from 'vm';
+import { createContext, runInContext, Context as ScriptContext } from 'vm';
 import * as readline from 'readline';
+import { Context } from '../client/Context';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -10,12 +11,12 @@ rl.setPrompt('> ');
 
 const client = new LocalClient();
 
-async function initContext(): Promise<Context> {
+async function initContext(): Promise<ScriptContext> {
   await client.init();
   return {
     VERSION: require('../../package.json').version,
     exit,
-    dcf: client,
+    dcc: new Context(client),
   };
 }
 
@@ -27,7 +28,7 @@ function exit() {
   console.log('Bye.');
 }
 
-async function runInContextAsync(line: string, context: Context) {
+async function runInContextAsync(line: string, context: ScriptContext) {
   try {
     rl.pause();
     const result = await runInContext(line, context);

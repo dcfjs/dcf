@@ -1,7 +1,7 @@
 import { LocalMaster } from '../master/LocalMaster';
-import { BaseClient, Request, Response } from './Client';
+import { Client, Request, Response } from './Client';
 
-export class LocalClient extends BaseClient {
+export class LocalClient implements Client {
   master = new LocalMaster();
 
   init(): Promise<void> {
@@ -12,5 +12,8 @@ export class LocalClient extends BaseClient {
   }
   request(m: Request): Promise<Response> {
     return this.master.processRequest(m);
+  }
+  workerCount() {
+    return this.master.workers.length;
   }
 }
