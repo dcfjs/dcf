@@ -1,3 +1,4 @@
+import { RELEASE } from './../worker/handlers';
 import { MasterServer } from './MasterServer';
 import { registerHandler } from '../common/handler';
 import { Request } from '../client/Client';
@@ -14,22 +15,40 @@ export const LOAD_CACHE = '@@master/loadCache';
 class Partition {
   worker: WorkerClient;
   id: string;
-  released: boolean = false;
 
   constructor(worker: WorkerClient, id: string) {
     this.worker = worker;
     this.id = id;
   }
-  async reduce(func: SerializeFunction): Promise<any> {
-    return this.worker.processRequest({
-      type: workerActions.REDUCE,
-      payload: {
-        func,
-        id: this.id,
-      },
-    });
+}
+
+function groupByWorker(partitions: Partition[]) {
+  type Record = {
+    worker: WorkerClient;
+    ids: string[];
+    indecies: number[];
+  };
+  const ret: Record[] = [];
+  const map: { [key: string]: Record } = {};
+  let index = 0;
+  for (const partition of partitions) {
+    const { worker } = partition;
+    let record;
+    if (!map[worker.id]) {
+      record = {
+        worker,
+        ids: [],
+        indecies: [],
+      };
+      map[worker.id] = record;
+      ret.push(record);
+    } else {
+      record = map[worker.id];
+    }
+    record.ids.push(partition.id);
+    record.indecies.push(index++);
   }
-  release() {}
+  return ret;
 }
 
 registerHandler(
@@ -100,12 +119,38 @@ registerHandler(
   ) => {
     const partitions: Partition[] = await context.processRequest(subRequest);
 
-    const results = await Promise.all(
-      partitions.map(v => v.reduce(partitionFunc)),
+    const tasks = groupByWorker(partitions);
+
+    const resp = await Promise.all(
+      tasks.map(v =>
+        v.worker.processRequest({
+          type: workerActions.REDUCE,
+          payload: {
+            func: partitionFunc,
+            ids: v.ids,
+          },
+        }),
+      ),
     );
 
+    const results = [];
+    for (let i = 0; i < tasks.length; i++) {
+      const result = resp[i] as any[];
+      const task = tasks[i];
+      for (let j = 0; j < result.length; j++) {
+        results[task.indecies[j]] = result[j];
+      }
+    }
+
     if (subRequest.type !== LOAD_CACHE) {
-      await Promise.all(partitions.map(v => v.release()));
+      await Promise.all(
+        tasks.map(v =>
+          v.worker.processRequest({
+            type: workerActions.RELEASE,
+            payload: v.ids,
+          }),
+        ),
+      );
     }
     const func = deserialize(finalFunc);
     return func(results);

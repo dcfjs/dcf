@@ -7,6 +7,7 @@ export const EXIT = '@@worker/exit';
 
 export const CREATE_PARTITION = '@@worker/createPartition';
 export const REDUCE = '@@worker/reduce';
+export const RELEASE = '@@worker/release';
 
 let wid = 'NO-ID'; // workerId
 
@@ -39,7 +40,7 @@ registerHandler(
     const func = deserialize(creator);
     const ret: string[] = [];
     for (let i = 0; i < count; i++) {
-      const id = `rdd-${wid}-${++idCounter}`;
+      const id = `rdd-${++idCounter}`;
       partitions[id] = func(args[i]);
       ret.push(id);
     }
@@ -49,8 +50,14 @@ registerHandler(
 
 registerHandler(
   REDUCE,
-  ({ id, func }: { id: string; func: SerializeFunction }) => {
+  ({ ids, func }: { ids: string[]; func: SerializeFunction }) => {
     const f = deserialize(func);
-    return f(partitions[id]);
+    return ids.map(id => f(partitions[id]));
   },
 );
+
+registerHandler(RELEASE, (ids: string[]) => {
+  for (const id of ids) {
+    delete partitions[id];
+  }
+});
