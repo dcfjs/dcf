@@ -35,7 +35,8 @@ async function main() {
   console.log(
     await rdd
       .filter(v => test(v), {
-        test: serialize(test, { min }),
+        test,
+        min, // environment is also valid for every upvalue function.
       })
       .take(10),
   );
