@@ -30,13 +30,15 @@ async function main() {
   const min = 5;
   console.log(await rdd.filter(v => v >= min, { min }).take(10));
 
-  // Upvalue functions should be explicit serialized, with their upvalues too:
+  // environment is also valid for every upvalue function.
   const test = (v: number) => v >= min;
   console.log(
     await rdd
       .filter(v => test(v), {
         test,
-        min, // environment is also valid for every upvalue function.
+        min,
+        // or you can serialized explicitly.
+        test1: serialize(test, { min }),
       })
       .take(10),
   );
