@@ -211,8 +211,38 @@ class RDD<T> {
     partitionFunc?: ((v: K) => number | SerializeFunction),
     env?: FunctionEnv,
   ): RDD<[K, V]> {
-    const serializedFunc =
-      typeof func === 'function' ? serialize(func, env) : func;
+    const funcSer = typeof func === 'function' ? serialize(func, env) : func;
+    return this.combineByKey(
+      x => x,
+      funcSer,
+      funcSer,
+      numPartitions,
+      partitionFunc,
+    );
+  }
+  combineByKey<K, V, C>(
+    this: RDD<[K, V]>,
+    createCombiner: ((a: V) => C) | SerializeFunction,
+    mergeValue: ((a: C, b: V) => C) | SerializeFunction,
+    mergeCombiners: ((a: C, b: C) => C) | SerializeFunction,
+    numPartitions: number = this.context.client.workerCount(),
+    partitionFunc?: ((v: K) => number | SerializeFunction),
+    env?: FunctionEnv,
+  ): RDD<[K, C]> {
+    const createCombinerSer =
+      typeof createCombiner === 'function'
+        ? serialize(createCombiner, env)
+        : createCombiner;
+
+    const mergeValueSer =
+      typeof mergeValue === 'function'
+        ? serialize(mergeValue, env)
+        : mergeValue;
+
+    const mergeCombinersSer =
+      typeof mergeCombiners === 'function'
+        ? serialize(mergeCombiners, env)
+        : mergeCombiners;
 
     const seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
     const serializedPFunc =
@@ -229,10 +259,34 @@ class RDD<T> {
             },
           );
 
-    const mapFunction = serialize(
+    const mapFunction1 = serialize(
       (datas: [K, V][]) => {
         const ret = [];
-        const map: { [key: string]: [K, V] } = {};
+        const map: { [key: string]: [K, C] } = {};
+        for (const item of datas) {
+          const k = v8.serialize(item[0]).toString('base64');
+          let r = map[k];
+          if (!r) {
+            r = [item[0], (createCombiner as any)(item[1])];
+            map[k] = r;
+            ret.push(r);
+          } else {
+            r[1] = (mergeValue as any)(r[1], item[1]);
+          }
+        }
+        return ret;
+      },
+      {
+        createCombiner: createCombinerSer,
+        mergeValue: mergeValueSer,
+        v8: requireModule('v8'),
+      },
+    );
+
+    const mapFunction2 = serialize(
+      (datas: [K, C][]) => {
+        const ret = [];
+        const map: { [key: string]: [K, C] } = {};
         for (const item of datas) {
           const k = v8.serialize(item[0]).toString('base64');
           let r = map[k];
@@ -241,13 +295,13 @@ class RDD<T> {
             map[k] = r;
             ret.push(r);
           } else {
-            r[1] = (func as any)(r[1], item[1]);
+            r[1] = (mergeCombiners as any)(r[1], item[1]);
           }
         }
         return ret;
       },
       {
-        func: serializedFunc,
+        mergeCombiners: mergeCombinersSer,
         v8: requireModule('v8'),
       },
     );
@@ -261,9 +315,9 @@ class RDD<T> {
       },
     );
 
-    return this.mapPartitions<[K, V]>(mapFunction)
+    return this.mapPartitions<[K, C]>(mapFunction1)
       .partitionBy(numPartitions, realPartitionFunc)
-      .mapPartitions<[K, V]>(mapFunction);
+      .mapPartitions<[K, C]>(mapFunction2);
   }
 }
 
