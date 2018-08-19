@@ -1,8 +1,14 @@
-import { SerializeFunction, FunctionEnv } from './../common/SerializeFunction';
+import {
+  SerializeFunction,
+  FunctionEnv,
+  requireModule,
+} from './../common/SerializeFunction';
 import { PartitionType } from './../common/types';
 import { REDUCE, CREATE_RDD, MAP, REPARTITION } from './../master/handlers';
 import { Client, Request } from './Client';
 import { serialize } from '../common/SerializeFunction';
+const XXHash = require('xxhash');
+const v8 = require('v8');
 
 type ResponseFactory<T> = (rdd: RDD<T>) => Request | Promise<Request>;
 
@@ -151,8 +157,16 @@ class RDD<T> {
   repartition(numPartitions: number): RDD<T> {
     return this.partitionBy(
       numPartitions,
-      () => Math.floor(Math.random() * numPartitions),
-      { numPartitions },
+      data => {
+        const hash = new XXHash(0xdeadbeaf);
+        hash.update(v8.serialize(data));
+        return hash.digest() % numPartitions;
+      },
+      {
+        numPartitions,
+        XXHash: requireModule('xxhash'),
+        v8: requireModule('v8'),
+      },
     );
   }
   partitionBy(
