@@ -133,9 +133,7 @@ registerHandler(
     partitionFunc: SerializeFunction;
   }) => {
     const func = deserialize(partitionFunc);
-    const ret = await Promise.all(
-      new Array(numPartitions).fill(0).map(v => createRepartitionPart()),
-    );
+    const ret = await Promise.all(new Array(numPartitions).fill(null));
     for (const id of ids) {
       const partition = getPartitionData(id);
       const tmp: any[][] = ret.map(v => []);
@@ -143,7 +141,17 @@ registerHandler(
         const id = func(item);
         tmp[id].push(item);
       }
-      await Promise.all(ret.map((id, i) => appendRepartitionPart(id, tmp[i])));
+      await Promise.all(
+        ret.map(async (id, i) => {
+          if (tmp[i].length === 0) {
+            return;
+          }
+          if (id == null) {
+            id = ret[i] = await createRepartitionPart();
+          }
+          return appendRepartitionPart(id, tmp[i]);
+        }),
+      );
     }
     return ret;
   },
@@ -154,7 +162,9 @@ registerHandler(REPARTITION_JOIN, async (partsList: any[][]) => {
 
   // serial for each new parition, parallel for parts.
   for (const parts of partsList) {
-    const datas: any[][] = await Promise.all(parts.map(getRepartitionPart));
+    const datas: any[][] = await Promise.all(
+      parts.map(v => getRepartitionPart(v)),
+    );
 
     partitions.push(saveNewPartition(([] as any).concat(...datas)));
   }

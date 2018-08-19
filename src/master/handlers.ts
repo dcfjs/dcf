@@ -230,7 +230,7 @@ registerHandler(
   ) => {
     const workerCount = context.workers.length;
     numPartitions = numPartitions == null ? workerCount : numPartitions;
-    
+
     const partitions: Partition[] = await context.processRequest(subRequest);
     const tasks = groupByWorker(partitions);
 
@@ -264,9 +264,10 @@ registerHandler(
     }
 
     // projection pieces from [workers][newPartition] to [newPartition][workers]
+    // and skip null parts.
     pieces = new Array(numPartitions)
       .fill(0)
-      .map((v, i) => pieces.map(v => v[i]));
+      .map((v, i) => pieces.map(v => v[i]).filter(v => v));
 
     // Step2: regenerate new partitions. and release parts.
     const rest = numPartitions % workerCount;

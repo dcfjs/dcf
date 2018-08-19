@@ -18,6 +18,7 @@ async function processNextRequest() {
       });
     }
   } catch (e) {
+    console.warn(e.stack);
     if (process.send) {
       process.send({
         ok: false,
