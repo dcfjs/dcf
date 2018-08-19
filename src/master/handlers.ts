@@ -149,7 +149,11 @@ registerHandler(
           }),
         ),
       ),
-    ).map((v, i) => new Partition(subPartitions[i].worker, v));
+    )
+      .map(
+        (v, i) => (v != null ? new Partition(subPartitions[i].worker, v) : v),
+      )
+      .filter(v => v);
 
     if (subRequest.type !== LOAD_CACHE) {
       await Promise.all(

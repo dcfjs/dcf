@@ -24,8 +24,9 @@ await dcc
 - [x] local master.
 - [x] rdd & partition creation & release.
 - [x] map & reduce
-- [ ] drop empty partition
+- [x] drop empty partition
 - [ ] repartition & reduceByKey
 - [ ] file loader/aliyun oss loader
 - [ ] decompresser
 - [ ] distributed master.
+- [ ] use debug module for information/error

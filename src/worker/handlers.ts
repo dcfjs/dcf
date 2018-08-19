@@ -26,6 +26,9 @@ const partitions: { [key: string]: any[] } = {};
 let idCounter = 0;
 
 function saveNewPartition(data: any[]) {
+  if (data.length === 0) {
+    return null;
+  }
   const id = `rdd-${++idCounter}`;
   partitions[id] = data;
   return id;
@@ -45,7 +48,7 @@ registerHandler(
     args: any[];
   }) => {
     const func = deserialize(creator);
-    const ret: string[] = [];
+    const ret: (string | null)[] = [];
     for (let i = 0; i < count; i++) {
       ret.push(saveNewPartition(func(args[i])));
     }
