@@ -41,6 +41,13 @@ export function serialize(f: Function, env?: FunctionEnv): SerializeFunction {
   };
 }
 
+export function requireModule(module: string) {
+  return {
+    __isRequire: true,
+    module,
+  };
+}
+
 export function deserialize(f: SerializeFunction): Function {
   return new Function(
     ...f.args,
@@ -49,5 +56,10 @@ export function deserialize(f: SerializeFunction): Function {
       .join('') +
       'return ' +
       f.source,
-  )(...f.values.map(v => (v.__isFunction ? deserialize(v) : v)));
+  )(
+    ...f.values.map(
+      v =>
+        v.__isFunction ? deserialize(v) : v.__isRequire ? require(v.module) : v,
+    ),
+  );
 }
