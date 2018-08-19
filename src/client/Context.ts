@@ -154,15 +154,17 @@ class RDD<T> {
       },
     );
   }
-  repartition(numPartitions: number): RDD<T> {
+  repartition(numPartitions: number, seed?: number): RDD<T> {
+    if (seed == null) {
+      seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
+    }
     return this.partitionBy(
       numPartitions,
       data => {
-        const hash = new XXHash(0xdeadbeaf);
-        hash.update(v8.serialize(data));
-        return hash.digest() % numPartitions;
+        return XXHash.hash(v8.serialize(data), seed) % numPartitions;
       },
       {
+        seed,
         numPartitions,
         XXHash: requireModule('xxhash'),
         v8: requireModule('v8'),
@@ -189,6 +191,7 @@ class RDD<T> {
     });
     return new RDD<T>(this.context, generateTask);
   }
+  coalesce(numPartitions: number) {}
 }
 
 export class Context {
