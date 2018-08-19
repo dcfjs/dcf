@@ -24,7 +24,7 @@ await dcc
 - [x] local master.
 - [x] rdd & partition creation & release.
 - [x] map & reduce
-- [ ] repartition & reduceByKey
+- [x] repartition & reduceByKey
 - [ ] distributed master.
 - [ ] disk storage partitions
 - [ ] cache
