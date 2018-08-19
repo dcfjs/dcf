@@ -30,3 +30,29 @@ await dcc
 - [ ] decompresser
 - [ ] distributed master.
 - [ ] use debug module for information/error
+
+## How to use
+
+#### Install from npm
+
+Not available yet.
+
+#### Run samples & cli
+
+download this repo, install dependencies
+
+```bash
+npm install
+```
+
+Run samples:
+
+```bash
+npm run ts-node src/samples/tutorial-0.ts
+```
+
+Run interactive cli:
+
+```bash
+npm start
+```
