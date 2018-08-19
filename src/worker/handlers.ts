@@ -86,7 +86,7 @@ registerHandler(
     args,
   }: {
     type: PartitionType;
-    creator: SerializeFunction;
+    creator: SerializeFunction<(arg: any) => any[]>;
     count: number;
     args: any[];
   }) => {
@@ -101,7 +101,13 @@ registerHandler(
 
 registerHandler(
   MAP,
-  ({ ids, func }: { ids: string[]; func: SerializeFunction }) => {
+  ({
+    ids,
+    func,
+  }: {
+    ids: string[];
+    func: SerializeFunction<(v: any[]) => any[]>;
+  }) => {
     const f = deserialize(func);
     return ids.map(id => saveNewPartition(f(partitions[id])));
   },
@@ -109,7 +115,13 @@ registerHandler(
 
 registerHandler(
   REDUCE,
-  ({ ids, func }: { ids: string[]; func: SerializeFunction }) => {
+  ({
+    ids,
+    func,
+  }: {
+    ids: string[];
+    func: SerializeFunction<(v: any[]) => any>;
+  }) => {
     const f = deserialize(func);
     return ids.map(id => f(getPartitionData(id)));
   },
@@ -131,7 +143,7 @@ registerHandler(
   }: {
     ids: string[];
     numPartitions: number;
-    partitionFunc: SerializeFunction;
+    partitionFunc: SerializeFunction<(v: any[], arg: any) => any[][]>;
     args: any[];
   }) => {
     const func = deserialize(partitionFunc);

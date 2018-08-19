@@ -1,8 +1,4 @@
-import {
-  SerializeFunction,
-  FunctionEnv,
-  requireModule,
-} from './../common/SerializeFunction';
+import { FunctionEnv, requireModule } from './../common/SerializeFunction';
 import {
   REDUCE,
   CREATE_RDD,
@@ -16,6 +12,19 @@ const XXHash = require('xxhash');
 const v8 = require('v8');
 
 type ResponseFactory<T> = (rdd: RDD<T>) => Request | Promise<Request>;
+
+function hashPartitionFunc<V>(numPartitions: number) {
+  const seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
+  return serialize(
+    (data: V) => XXHash.hash(v8.serialize(data), seed) % numPartitions,
+    {
+      numPartitions,
+      seed,
+      XXHash: requireModule('xxhash'),
+      v8: requireModule('v8'),
+    },
+  );
+}
 
 class RDD<T> {
   context: Context;
@@ -31,8 +40,8 @@ class RDD<T> {
       type: REDUCE,
       payload: {
         subRequest: await this.generateTask(this),
-        partitionFunc: serialize((data: any[]) => data),
-        finalFunc: serialize((results: any[][]) => {
+        partitionFunc: serialize((data: T[]) => data),
+        finalFunc: serialize((results: T[][]) => {
           return results;
         }),
       },
@@ -43,13 +52,13 @@ class RDD<T> {
       type: REDUCE,
       payload: {
         subRequest: await this.generateTask(this),
-        partitionFunc: serialize((data: any[]) => data.slice(0, count), {
+        partitionFunc: serialize((data: T[]) => data.slice(0, count), {
           count,
         }),
         finalFunc: serialize(
-          (results: any[][]) => {
+          (results: T[][]) => {
             let total = 0;
-            const ret: any[][] = [];
+            const ret: T[][] = [];
             for (const result of results) {
               if (total + result.length >= count) {
                 ret.push(result.slice(0, count - total));
@@ -58,7 +67,7 @@ class RDD<T> {
               ret.push(result);
               total += result.length;
             }
-            return ([] as any[]).concat(...ret);
+            return ([] as T[]).concat(...ret);
           },
           { count },
         ),
@@ -70,25 +79,25 @@ class RDD<T> {
       type: REDUCE,
       payload: {
         subRequest: await this.generateTask(this),
-        partitionFunc: serialize((data: any[]) => data.length),
+        partitionFunc: serialize((data: T[]) => data.length),
         finalFunc: serialize((result: number[]) =>
           result.reduce((a, b) => a + b, 0),
         ),
       },
     });
   }
-  async max(): Promise<number> {
+  async max(): Promise<number | null> {
     return this.context.client.request({
       type: REDUCE,
       payload: {
         subRequest: await this.generateTask(this),
-        partitionFunc: serialize((data: any[]) =>
+        partitionFunc: serialize((data: (T | null)[]) =>
           data.reduce(
             (a, b) => (a !== null && (b === null || a > b) ? a : b),
             null,
           ),
         ),
-        finalFunc: serialize((result: any[]) =>
+        finalFunc: serialize((result: (T | null)[]) =>
           result.reduce(
             (a, b) => (a !== null && (b === null || a > b) ? a : b),
             null,
@@ -102,13 +111,13 @@ class RDD<T> {
       type: REDUCE,
       payload: {
         subRequest: await this.generateTask(this),
-        partitionFunc: serialize((data: any[]) =>
+        partitionFunc: serialize((data: (T | null)[]) =>
           data.reduce(
             (a, b) => (a !== null && (b === null || a < b) ? a : b),
             null,
           ),
         ),
-        finalFunc: serialize((result: any[]) =>
+        finalFunc: serialize((result: (T | null)[]) =>
           result.reduce(
             (a, b) => (a !== null && (b === null || a < b) ? a : b),
             null,
@@ -117,79 +126,57 @@ class RDD<T> {
       },
     });
   }
-  mapPartitions<T1>(
-    func: ((v: T[]) => T1[]) | SerializeFunction,
-    env?: FunctionEnv,
-  ): RDD<T1> {
-    const serializedFunc =
-      typeof func === 'function' ? serialize(func, env) : func;
+  mapPartitions<T1>(func: (v: T[]) => T1[], env?: FunctionEnv): RDD<T1> {
+    if (typeof func === 'function') {
+      func = serialize(func, env);
+    }
     const generateTask = async (): Promise<Request> => ({
       type: MAP,
       payload: {
         subRequest: await this.generateTask(this),
-        func: serializedFunc,
+        func,
       },
     });
     return new RDD<T1>(this.context, generateTask);
   }
-  map<T1>(
-    func: ((v: T) => T1) | SerializeFunction,
-    env?: FunctionEnv,
-  ): RDD<T1> {
-    const serializedFunc =
-      typeof func === 'function' ? serialize(func, env) : func;
-    return this.mapPartitions(
-      (partition: any[]) => partition.map(func as any),
-      {
-        func: serializedFunc,
-      },
-    );
+  map<T1>(func: ((v: T) => T1), env?: FunctionEnv): RDD<T1> {
+    if (typeof func === 'function') {
+      func = serialize(func, env);
+    }
+    return this.mapPartitions((partition: T[]) => partition.map(func), {
+      func,
+    });
   }
-  filter(
-    func: ((v: T) => boolean) | SerializeFunction,
-    env?: FunctionEnv,
-  ): RDD<T> {
-    const serializedFunc =
-      typeof func === 'function' ? serialize(func, env) : func;
+  filter(func: (v: T) => boolean, env?: FunctionEnv): RDD<T> {
+    if (typeof func === 'function') {
+      func = serialize(func, env);
+    }
 
-    return this.mapPartitions(
-      (partition: any[]) => partition.filter(func as any),
-      {
-        func: serializedFunc,
-      },
-    );
+    return this.mapPartitions((partition: T[]) => partition.filter(func), {
+      func,
+    });
   }
   repartition(numPartitions: number, seed?: number): RDD<T> {
     if (seed == null) {
       seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
     }
-    return this.partitionBy(
-      numPartitions,
-      data => XXHash.hash(v8.serialize(data), seed) % numPartitions,
-      {
-        seed,
-        numPartitions,
-        XXHash: requireModule('xxhash'),
-        v8: requireModule('v8'),
-      },
-    );
+    return this.partitionBy(numPartitions, hashPartitionFunc<T>(numPartitions));
   }
   partitionBy(
     numPartitions: number,
-    partitionFunc: ((v: T) => number) | SerializeFunction,
+    partitionFunc: (v: T) => number,
     env?: FunctionEnv,
   ) {
-    const serializedFunc =
-      typeof partitionFunc === 'function'
-        ? serialize(partitionFunc, env)
-        : partitionFunc;
+    if (typeof partitionFunc === 'function') {
+      partitionFunc = serialize(partitionFunc, env);
+    }
 
     const generateTask = async (): Promise<Request> => ({
       type: REPARTITION,
       payload: {
         subRequest: await this.generateTask(this),
         numPartitions,
-        partitionFunc: serializedFunc,
+        partitionFunc,
       },
     });
     return new RDD<T>(this.context, generateTask);
@@ -206,58 +193,41 @@ class RDD<T> {
   }
   reduceByKey<K, V>(
     this: RDD<[K, V]>,
-    func: ((a: V, B: V) => V) | SerializeFunction,
+    func: ((a: V, B: V) => V),
     numPartitions: number = this.context.client.workerCount(),
-    partitionFunc?: ((v: K) => number | SerializeFunction),
+    partitionFunc?: (v: K) => number,
     env?: FunctionEnv,
   ): RDD<[K, V]> {
-    const funcSer = typeof func === 'function' ? serialize(func, env) : func;
     return this.combineByKey(
       x => x,
-      funcSer,
-      funcSer,
+      func,
+      func,
       numPartitions,
       partitionFunc,
+      env,
     );
   }
   combineByKey<K, V, C>(
     this: RDD<[K, V]>,
-    createCombiner: ((a: V) => C) | SerializeFunction,
-    mergeValue: ((a: C, b: V) => C) | SerializeFunction,
-    mergeCombiners: ((a: C, b: C) => C) | SerializeFunction,
+    createCombiner: ((a: V) => C),
+    mergeValue: ((a: C, b: V) => C),
+    mergeCombiners: ((a: C, b: C) => C),
     numPartitions: number = this.context.client.workerCount(),
-    partitionFunc?: ((v: K) => number | SerializeFunction),
+    partitionFunc: (v: K) => number = hashPartitionFunc<K>(numPartitions),
     env?: FunctionEnv,
   ): RDD<[K, C]> {
-    const createCombinerSer =
-      typeof createCombiner === 'function'
-        ? serialize(createCombiner, env)
-        : createCombiner;
-
-    const mergeValueSer =
-      typeof mergeValue === 'function'
-        ? serialize(mergeValue, env)
-        : mergeValue;
-
-    const mergeCombinersSer =
-      typeof mergeCombiners === 'function'
-        ? serialize(mergeCombiners, env)
-        : mergeCombiners;
-
-    const seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
-    const serializedPFunc =
-      typeof partitionFunc === 'function'
-        ? serialize(partitionFunc, env)
-        : partitionFunc ||
-          serialize(
-            (data: K) => XXHash.hash(v8.serialize(data), seed) % numPartitions,
-            {
-              numPartitions,
-              seed,
-              XXHash: requireModule('xxhash'),
-              v8: requireModule('v8'),
-            },
-          );
+    if (typeof createCombiner === 'function') {
+      createCombiner = serialize(createCombiner, env);
+    }
+    if (typeof mergeValue === 'function') {
+      mergeValue = serialize(mergeValue, env);
+    }
+    if (typeof mergeCombiners === 'function') {
+      mergeCombiners = serialize(mergeCombiners, env);
+    }
+    if (typeof partitionFunc === 'function') {
+      partitionFunc = serialize(partitionFunc, env);
+    }
 
     const mapFunction1 = serialize(
       (datas: [K, V][]) => {
@@ -267,18 +237,18 @@ class RDD<T> {
           const k = v8.serialize(item[0]).toString('base64');
           let r = map[k];
           if (!r) {
-            r = [item[0], (createCombiner as any)(item[1])];
+            r = [item[0], createCombiner(item[1])];
             map[k] = r;
             ret.push(r);
           } else {
-            r[1] = (mergeValue as any)(r[1], item[1]);
+            r[1] = mergeValue(r[1], item[1]);
           }
         }
         return ret;
       },
       {
-        createCombiner: createCombinerSer,
-        mergeValue: mergeValueSer,
+        createCombiner,
+        mergeValue,
         v8: requireModule('v8'),
       },
     );
@@ -295,23 +265,23 @@ class RDD<T> {
             map[k] = r;
             ret.push(r);
           } else {
-            r[1] = (mergeCombiners as any)(r[1], item[1]);
+            r[1] = mergeCombiners(r[1], item[1]);
           }
         }
         return ret;
       },
       {
-        mergeCombiners: mergeCombinersSer,
+        mergeCombiners,
         v8: requireModule('v8'),
       },
     );
 
     const realPartitionFunc = serialize(
-      (data: [K, V]) => {
-        return (partitionFunc as any)(data[0]);
+      (data: [K, C]) => {
+        return partitionFunc(data[0]);
       },
       {
-        partitionFunc: serializedPFunc,
+        partitionFunc,
       },
     );
 

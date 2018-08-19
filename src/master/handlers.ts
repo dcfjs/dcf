@@ -80,7 +80,7 @@ registerHandler(
       type,
     }: {
       numPartitions?: number;
-      creator: SerializeFunction;
+      creator: SerializeFunction<(arg: any) => any[]>;
       args: any[];
       type: PartitionType;
     },
@@ -130,7 +130,7 @@ registerHandler(
       func,
     }: {
       subRequest: Request;
-      func: SerializeFunction;
+      func: SerializeFunction<(v: any[]) => any[]>;
     },
     context: MasterServer,
   ) => {
@@ -175,8 +175,8 @@ registerHandler(
       finalFunc,
     }: {
       subRequest: Request;
-      partitionFunc: SerializeFunction;
-      finalFunc: SerializeFunction;
+      partitionFunc: SerializeFunction<(arg: any[]) => any>;
+      finalFunc: SerializeFunction<(arg: any[]) => any>;
     },
     context: MasterServer,
   ) => {
@@ -224,7 +224,7 @@ registerHandler(
     }: {
       subRequest: Request;
       numPartitions: number;
-      partitionFunc: SerializeFunction;
+      partitionFunc: SerializeFunction<(v: any) => number>;
     },
     context: MasterServer,
   ) => {
@@ -251,7 +251,7 @@ registerHandler(
                   .fill(0)
                   .map(v => []);
                 for (const item of data) {
-                  const id = (partitionFunc as any)(item);
+                  const id = partitionFunc(item);
                   ret[id].push(item);
                 }
                 return ret;
