@@ -165,9 +165,7 @@ class RDD<T> {
     }
     return this.partitionBy(
       numPartitions,
-      data => {
-        return XXHash.hash(v8.serialize(data), seed) % numPartitions;
-      },
+      data => XXHash.hash(v8.serialize(data), seed) % numPartitions,
       {
         seed,
         numPartitions,
@@ -205,6 +203,67 @@ class RDD<T> {
       },
     });
     return new RDD<T>(this.context, generateTask);
+  }
+  reduceByKey<K, V>(
+    this: RDD<[K, V]>,
+    func: ((a: V, B: V) => V) | SerializeFunction,
+    numPartitions: number = this.context.client.workerCount(),
+    partitionFunc?: ((v: K) => number | SerializeFunction),
+    env?: FunctionEnv,
+  ): RDD<[K, V]> {
+    const serializedFunc =
+      typeof func === 'function' ? serialize(func, env) : func;
+
+    const seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
+    const serializedPFunc =
+      typeof partitionFunc === 'function'
+        ? serialize(partitionFunc, env)
+        : partitionFunc ||
+          serialize(
+            (data: K) => XXHash.hash(v8.serialize(data), seed) % numPartitions,
+            {
+              numPartitions,
+              seed,
+              XXHash: requireModule('xxhash'),
+              v8: requireModule('v8'),
+            },
+          );
+
+    const mapFunction = serialize(
+      (datas: [K, V][]) => {
+        const ret = [];
+        const map: { [key: string]: [K, V] } = {};
+        for (const item of datas) {
+          const k = v8.serialize(item[0]).toString('base64');
+          let r = map[k];
+          if (!r) {
+            r = [item[0], item[1]];
+            map[k] = r;
+            ret.push(r);
+          } else {
+            r[1] = (func as any)(r[1], item[1]);
+          }
+        }
+        return ret;
+      },
+      {
+        func: serializedFunc,
+        v8: requireModule('v8'),
+      },
+    );
+
+    const realPartitionFunc = serialize(
+      (data: [K, V]) => {
+        return (partitionFunc as any)(data[0]);
+      },
+      {
+        partitionFunc: serializedPFunc,
+      },
+    );
+
+    return this.mapPartitions<[K, V]>(mapFunction)
+      .partitionBy(numPartitions, realPartitionFunc)
+      .mapPartitions<[K, V]>(mapFunction);
   }
 }
 

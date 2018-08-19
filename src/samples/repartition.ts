@@ -18,6 +18,19 @@ async function main() {
 
   console.log(await rdd.coalesce(2).collect());
 
+  const rdd1 = dcc.parallelize<[string, number]>([
+    ['a', 1],
+    ['b', 2],
+    ['a', 3],
+    ['b', 4],
+    ['a', 5],
+    ['b', 6],
+    ['a', 7],
+    ['b', 8],
+  ]);
+
+  console.log(await rdd1.reduceByKey((a, b) => a + b).take(100));
+
   // Shutdown
   client.dispose();
 }
