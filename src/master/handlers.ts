@@ -1,4 +1,3 @@
-import { RELEASE } from './../worker/handlers';
 import { MasterServer } from './MasterServer';
 import { registerHandler } from '../common/handler';
 import { Request } from '../client/Client';
@@ -245,7 +244,22 @@ registerHandler(
           payload: {
             ids: v.ids,
             numPartitions,
-            partitionFunc,
+            partitionFunc: serialize(
+              (data: any[]) => {
+                const ret: any[][] = new Array(numPartitions)
+                  .fill(0)
+                  .map(v => []);
+                for (const item of data) {
+                  const id = (partitionFunc as any)(item);
+                  ret[id].push(item);
+                }
+                return ret;
+              },
+              {
+                numPartitions,
+                partitionFunc,
+              },
+            ),
           },
         }),
       ),

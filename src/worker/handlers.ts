@@ -136,11 +136,7 @@ registerHandler(
     const ret = await Promise.all(new Array(numPartitions).fill(null));
     for (const id of ids) {
       const partition = getPartitionData(id);
-      const tmp: any[][] = ret.map(v => []);
-      for (const item of partition) {
-        const id = func(item);
-        tmp[id].push(item);
-      }
+      const tmp: any[][] = func(partition);
       await Promise.all(
         ret.map(async (id, i) => {
           if (tmp[i].length === 0) {
