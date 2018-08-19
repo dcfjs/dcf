@@ -141,7 +141,7 @@ registerHandler(
       const tmp: any[][] = func(partition, args[i]);
       await Promise.all(
         ret.map(async (id, j) => {
-          if (tmp[j].length === 0) {
+          if (!tmp[j] || tmp[j].length === 0) {
             return;
           }
           if (id == null) {

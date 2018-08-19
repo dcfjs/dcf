@@ -3,8 +3,13 @@ import {
   FunctionEnv,
   requireModule,
 } from './../common/SerializeFunction';
-import { PartitionType } from './../common/types';
-import { REDUCE, CREATE_RDD, MAP, REPARTITION } from './../master/handlers';
+import {
+  REDUCE,
+  CREATE_RDD,
+  MAP,
+  REPARTITION,
+  COALESCE,
+} from './../master/handlers';
 import { Client, Request } from './Client';
 import { serialize } from '../common/SerializeFunction';
 const XXHash = require('xxhash');
@@ -191,7 +196,16 @@ class RDD<T> {
     });
     return new RDD<T>(this.context, generateTask);
   }
-  coalesce(numPartitions: number) {}
+  coalesce(numPartitions: number) {
+    const generateTask = async (): Promise<Request> => ({
+      type: COALESCE,
+      payload: {
+        subRequest: await this.generateTask(this),
+        numPartitions,
+      },
+    });
+    return new RDD<T>(this.context, generateTask);
+  }
 }
 
 export class Context {

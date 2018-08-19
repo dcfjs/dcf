@@ -16,6 +16,8 @@ async function main() {
 
   console.log(await rdd.repartition(2).collect());
 
+  console.log(await rdd.coalesce(2).collect());
+
   // Shutdown
   client.dispose();
 }
