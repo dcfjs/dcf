@@ -52,16 +52,29 @@ function releasePartition(id: string) {
   delete partitions[id];
 }
 
-async function saveRepartitionPart(data: any[]) {
+async function createRepartitionPart() {
   const id = `tmp/part-${wid}-${++idCounter}.part`;
-  await fs.writeFile(id, v8.serialize(data));
   return id;
 }
 
+async function appendRepartitionPart(id: any, data: any[]) {
+  const buf = v8.serialize(data);
+  const length = Buffer.alloc(4);
+  length.writeInt32LE(buf.length, 0);
+
+  await fs.appendFile(id, Buffer.concat([length, buf]));
+}
+
 async function getRepartitionPart(id: any) {
-  const ret = v8.deserialize(await fs.readFile(id));
+  const buf = await fs.readFile(id);
+  const ret: any[][] = [];
+  for (let index = 0; index < buf.length; ) {
+    const length = buf.readInt32LE(index);
+    ret.push(v8.deserialize(buf.slice(index + 4, index + 4 + length)));
+    index += length + 4;
+  }
   await fs.unlink(id);
-  return ret;
+  return ([] as any).concat(...ret);
 }
 
 registerHandler(
@@ -110,7 +123,7 @@ registerHandler(RELEASE, (ids: string[]) => {
 
 registerHandler(
   REPARTITION_SLICE,
-  ({
+  async ({
     ids,
     numPartitions,
     partitionFunc,
@@ -120,17 +133,19 @@ registerHandler(
     partitionFunc: SerializeFunction;
   }) => {
     const func = deserialize(partitionFunc);
-    return Promise.all(
-      ids.map(async id => {
-        const partition = partitions[id];
-        const parts: any[][] = new Array(numPartitions).fill(0).map(v => []);
-        for (const item of partition) {
-          const id = func(item);
-          parts[id].push(item);
-        }
-        return Promise.all(parts.map(saveRepartitionPart));
-      }),
+    const ret = await Promise.all(
+      new Array(numPartitions).fill(0).map(v => createRepartitionPart()),
     );
+    for (const id of ids) {
+      const partition = getPartitionData(id);
+      const tmp: any[][] = ret.map(v => []);
+      for (const item of partition) {
+        const id = func(item);
+        tmp[id].push(item);
+      }
+      await Promise.all(ret.map((id, i) => appendRepartitionPart(id, tmp[i])));
+    }
+    return ret;
   },
 );
 

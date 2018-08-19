@@ -228,6 +228,9 @@ registerHandler(
     },
     context: MasterServer,
   ) => {
+    const workerCount = context.workers.length;
+    numPartitions = numPartitions == null ? workerCount : numPartitions;
+    
     const partitions: Partition[] = await context.processRequest(subRequest);
     const tasks = groupByWorker(partitions);
 
@@ -235,7 +238,7 @@ registerHandler(
     // Local mode: return a local file name.
     // Remote mode: return a rdd id & worker host & port.
     // Empty part will return null.
-    const pieceGroups = await Promise.all(
+    let pieces = await Promise.all(
       tasks.map(v =>
         v.worker.processRequest({
           type: workerActions.REPARTITION_SLICE,
@@ -247,7 +250,6 @@ registerHandler(
         }),
       ),
     );
-    let pieces = flatWorkerResult(tasks, pieceGroups);
 
     // Release dependencies
     if (subRequest.type !== LOAD_CACHE) {
@@ -261,14 +263,12 @@ registerHandler(
       );
     }
 
-    // projection pieces from [oldPartition][newPartition] to [newPartition][oldPartition]
+    // projection pieces from [workers][newPartition] to [newPartition][workers]
     pieces = new Array(numPartitions)
       .fill(0)
       .map((v, i) => pieces.map(v => v[i]));
 
     // Step2: regenerate new partitions. and release parts.
-    const workerCount = context.workers.length;
-    numPartitions = numPartitions == null ? workerCount : numPartitions;
     const rest = numPartitions % workerCount;
     const eachCount = (numPartitions - rest) / workerCount;
 
