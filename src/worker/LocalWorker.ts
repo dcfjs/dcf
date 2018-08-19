@@ -37,7 +37,7 @@ export class LocalWorker implements WorkerClient {
       },
     });
   }
-  onMessage = (r: Response) => {
+  onMessage = (r: Response<any>) => {
     const msg = this.sequence.shift();
     if (!msg) {
       console.warn('Unexpected response from worker.');
@@ -59,7 +59,7 @@ export class LocalWorker implements WorkerClient {
       this.waitExit = undefined;
     }
   };
-  processRequest(m: Request): Promise<any> {
+  processRequest<T>(m: Request<T>): Promise<any> {
     return new Promise((resolve, reject) => {
       if (this.worker == null) {
         throw new Error('Worker not inited.');

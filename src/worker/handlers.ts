@@ -38,13 +38,13 @@ registerHandler(EXIT, () => {
 const partitions: { [key: string]: any[] } = {};
 let idCounter = 0;
 
-function saveNewPartition(data: any[]) {
+function saveNewPartition<T>(data: T[]) {
   const id = `rdd-${++idCounter}`;
   partitions[id] = data;
   return id;
 }
 
-function getPartitionData(id: string) {
+function getPartitionData<T>(id: string): T[] {
   return partitions[id];
 }
 
@@ -57,7 +57,9 @@ async function createRepartitionPart() {
   return id;
 }
 
-async function appendRepartitionPart(id: any, data: any[]) {
+export type PartId = string;
+
+async function appendRepartitionPart<T>(id: PartId, data: T[]) {
   const buf = v8.serialize(data);
   const length = Buffer.alloc(4);
   length.writeInt32LE(buf.length, 0);
@@ -65,30 +67,30 @@ async function appendRepartitionPart(id: any, data: any[]) {
   await fs.appendFile(id, Buffer.concat([length, buf]));
 }
 
-async function getRepartitionPart(id: any) {
+async function getRepartitionPart<T>(id: PartId): Promise<T[]> {
   const buf = await fs.readFile(id);
-  const ret: any[][] = [];
+  const ret: T[][] = [];
   for (let index = 0; index < buf.length; ) {
     const length = buf.readInt32LE(index);
     ret.push(v8.deserialize(buf.slice(index + 4, index + 4 + length)));
     index += length + 4;
   }
   await fs.unlink(id);
-  return ([] as any).concat(...ret);
+  return ([] as T[]).concat(...ret);
 }
 
 registerHandler(
   CREATE_PARTITION,
-  ({
+  <T, Arg>({
     type,
     creator,
     count,
     args,
   }: {
     type: PartitionType;
-    creator: SerializeFunction<(arg: any) => any[]>;
+    creator: SerializeFunction<(arg: Arg) => T[]>;
     count: number;
-    args: any[];
+    args: Arg[];
   }) => {
     const func = deserialize(creator);
     const ret: (string | null)[] = [];
@@ -101,12 +103,12 @@ registerHandler(
 
 registerHandler(
   MAP,
-  ({
+  <T, T1>({
     ids,
     func,
   }: {
     ids: string[];
-    func: SerializeFunction<(v: any[]) => any[]>;
+    func: SerializeFunction<(v: T[]) => T1[]>;
   }) => {
     const f = deserialize(func);
     return ids.map(id => saveNewPartition(f(partitions[id])));
@@ -115,12 +117,12 @@ registerHandler(
 
 registerHandler(
   REDUCE,
-  ({
+  <T, T1>({
     ids,
     func,
   }: {
     ids: string[];
-    func: SerializeFunction<(v: any[]) => any>;
+    func: SerializeFunction<(v: T[]) => T1>;
   }) => {
     const f = deserialize(func);
     return ids.map(id => f(getPartitionData(id)));
@@ -135,7 +137,7 @@ registerHandler(RELEASE, (ids: string[]) => {
 
 registerHandler(
   REPARTITION_SLICE,
-  async ({
+  async <T, Arg>({
     ids,
     numPartitions,
     partitionFunc,
@@ -143,14 +145,14 @@ registerHandler(
   }: {
     ids: string[];
     numPartitions: number;
-    partitionFunc: SerializeFunction<(v: any[], arg: any) => any[][]>;
-    args: any[];
+    partitionFunc: SerializeFunction<(v: T[], arg: Arg) => T[][]>;
+    args: Arg[];
   }) => {
     const func = deserialize(partitionFunc);
     const ret = await Promise.all(new Array(numPartitions).fill(null));
     for (const [i, id] of ids.entries()) {
-      const partition = getPartitionData(id);
-      const tmp: any[][] = func(partition, args[i]);
+      const partition = getPartitionData<T>(id);
+      const tmp: T[][] = func(partition, args[i]);
       await Promise.all(
         ret.map(async (id, j) => {
           if (!tmp[j] || tmp[j].length === 0) {
@@ -167,16 +169,16 @@ registerHandler(
   },
 );
 
-registerHandler(REPARTITION_JOIN, async (partsList: any[][]) => {
+registerHandler(REPARTITION_JOIN, async <T>(partsList: string[][]) => {
   const partitions = [];
 
   // serial for each new parition, parallel for parts.
   for (const parts of partsList) {
-    const datas: any[][] = await Promise.all(
-      parts.map(v => getRepartitionPart(v)),
+    const datas: T[][] = await Promise.all(
+      parts.map(v => getRepartitionPart<T>(v)),
     );
 
-    partitions.push(saveNewPartition(([] as any).concat(...datas)));
+    partitions.push(saveNewPartition(([] as T[]).concat(...datas)));
   }
   return partitions;
 });

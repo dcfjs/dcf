@@ -1,17 +1,17 @@
 export interface Client {
-  request(m: Request): Promise<any>;
+  request<T>(m: Request<T>): Promise<any>;
   dispose(): void | Promise<void>;
 
   workerCount(): number;
 }
 
-export interface Request {
+export interface Request<T> {
   type: string;
-  payload?: any;
+  payload?: T;
 }
 
-export interface Response {
+export interface Response<T> {
   ok: boolean;
   message?: string;
-  payload?: any;
+  payload?: T;
 }

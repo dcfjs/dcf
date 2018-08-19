@@ -11,7 +11,7 @@ import { serialize } from '../common/SerializeFunction';
 const XXHash = require('xxhash');
 const v8 = require('v8');
 
-type ResponseFactory<T> = (rdd: RDD<T>) => Request | Promise<Request>;
+type ResponseFactory<T> = (rdd: RDD<T>) => Request<any> | Promise<Request<any>>;
 
 function hashPartitionFunc<V>(numPartitions: number) {
   const seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
@@ -130,7 +130,7 @@ class RDD<T> {
     if (typeof func === 'function') {
       func = serialize(func, env);
     }
-    const generateTask = async (): Promise<Request> => ({
+    const generateTask = async () => ({
       type: MAP,
       payload: {
         subRequest: await this.generateTask(this),
@@ -171,7 +171,7 @@ class RDD<T> {
       partitionFunc = serialize(partitionFunc, env);
     }
 
-    const generateTask = async (): Promise<Request> => ({
+    const generateTask = async () => ({
       type: REPARTITION,
       payload: {
         subRequest: await this.generateTask(this),
@@ -182,7 +182,7 @@ class RDD<T> {
     return new RDD<T>(this.context, generateTask);
   }
   coalesce(numPartitions: number) {
-    const generateTask = async (): Promise<Request> => ({
+    const generateTask = async () => ({
       type: COALESCE,
       payload: {
         subRequest: await this.generateTask(this),
@@ -298,15 +298,12 @@ export class Context {
   }
 
   emptyRDD(): RDD<never> {
-    return new RDD<never>(
-      this,
-      (): Request => ({
-        type: CREATE_RDD,
-        payload: {
-          partitionCount: 0,
-        },
-      }),
-    );
+    return new RDD<never>(this, () => ({
+      type: CREATE_RDD,
+      payload: {
+        partitionCount: 0,
+      },
+    }));
   }
 
   parallelize<T>(arr: T[], numSlice?: number): RDD<T> {
@@ -324,17 +321,14 @@ export class Context {
       index = end;
     }
 
-    return new RDD<T>(
-      this,
-      (): Request => ({
-        type: CREATE_RDD,
-        payload: {
-          partitionCount: numSlice,
-          creator: serialize((arg: T[]) => arg),
-          args: args,
-          type: 'memory',
-        },
-      }),
-    );
+    return new RDD<T>(this, () => ({
+      type: CREATE_RDD,
+      payload: {
+        partitionCount: numSlice,
+        creator: serialize((arg: T[]) => arg),
+        args: args,
+        type: 'memory',
+      },
+    }));
   }
 }

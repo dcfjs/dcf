@@ -1,3 +1,4 @@
+import { PartId } from './../worker/handlers';
 import { MasterServer } from './MasterServer';
 import { registerHandler } from '../common/handler';
 import { Request } from '../client/Client';
@@ -58,10 +59,10 @@ function groupByWorker(partitions: Partition[]) {
   return ret;
 }
 
-function flatWorkerResult(tasks: TaskRecord[], resp: any[][]) {
-  const results = [];
+function flatWorkerResult<T>(tasks: TaskRecord[], resp: T[][]) {
+  const results: T[] = [];
   for (let i = 0; i < tasks.length; i++) {
-    const result = resp[i] as any[];
+    const result = resp[i] as T[];
     const task = tasks[i];
     for (let j = 0; j < result.length; j++) {
       results[task.indecies[j]] = result[j];
@@ -72,7 +73,7 @@ function flatWorkerResult(tasks: TaskRecord[], resp: any[][]) {
 
 registerHandler(
   CREATE_RDD,
-  async (
+  async <T, Arg>(
     {
       numPartitions,
       creator,
@@ -80,8 +81,8 @@ registerHandler(
       type,
     }: {
       numPartitions?: number;
-      creator: SerializeFunction<(arg: any) => any[]>;
-      args: any[];
+      creator: SerializeFunction<(arg: Arg) => T[]>;
+      args: Arg[];
       type: PartitionType;
     },
     context: MasterServer,
@@ -118,19 +119,19 @@ registerHandler(
       partitionIndex += subCount;
     }
 
-    return ([] as any[]).concat(...(await Promise.all(result)));
+    return ([] as Partition[]).concat(...(await Promise.all(result)));
   },
 );
 
 registerHandler(
   MAP,
-  async (
+  async <T, T1>(
     {
       subRequest,
       func,
     }: {
-      subRequest: Request;
-      func: SerializeFunction<(v: any[]) => any[]>;
+      subRequest: Request<any>;
+      func: SerializeFunction<(v: T[]) => T1[]>;
     },
     context: MasterServer,
   ) => {
@@ -140,14 +141,15 @@ registerHandler(
     const partitions = flatWorkerResult(
       tasks,
       await Promise.all(
-        tasks.map(v =>
-          v.worker.processRequest({
-            type: workerActions.MAP,
-            payload: {
-              func,
-              ids: v.ids,
-            },
-          }),
+        tasks.map(
+          v =>
+            v.worker.processRequest({
+              type: workerActions.MAP,
+              payload: {
+                func,
+                ids: v.ids,
+              },
+            }) as Promise<string[]>,
         ),
       ),
     ).map((v, i) => new Partition(subPartitions[i].worker, v));
@@ -168,15 +170,15 @@ registerHandler(
 
 registerHandler(
   REDUCE,
-  async (
+  async <T, T1, T2>(
     {
       subRequest,
       partitionFunc,
       finalFunc,
     }: {
-      subRequest: Request;
-      partitionFunc: SerializeFunction<(arg: any[]) => any>;
-      finalFunc: SerializeFunction<(arg: any[]) => any>;
+      subRequest: Request<any>;
+      partitionFunc: SerializeFunction<(arg: T[]) => T1>;
+      finalFunc: SerializeFunction<(arg: T1[]) => T2>;
     },
     context: MasterServer,
   ) => {
@@ -187,14 +189,15 @@ registerHandler(
     const results = flatWorkerResult(
       tasks,
       await Promise.all(
-        tasks.map(v =>
-          v.worker.processRequest({
-            type: workerActions.REDUCE,
-            payload: {
-              func: partitionFunc,
-              ids: v.ids,
-            },
-          }),
+        tasks.map(
+          v =>
+            v.worker.processRequest({
+              type: workerActions.REDUCE,
+              payload: {
+                func: partitionFunc,
+                ids: v.ids,
+              },
+            }) as Promise<T1[]>,
         ),
       ),
     );
@@ -216,15 +219,15 @@ registerHandler(
 
 registerHandler(
   REPARTITION,
-  async (
+  async <T>(
     {
       subRequest,
       numPartitions,
       partitionFunc,
     }: {
-      subRequest: Request;
+      subRequest: Request<any>;
       numPartitions: number;
-      partitionFunc: SerializeFunction<(v: any) => number>;
+      partitionFunc: SerializeFunction<(v: T) => number>;
     },
     context: MasterServer,
   ) => {
@@ -239,31 +242,32 @@ registerHandler(
     // Remote mode: return a rdd id & worker host & port.
     // Empty part will return null.
     let pieces = await Promise.all(
-      tasks.map(v =>
-        v.worker.processRequest({
-          type: workerActions.REPARTITION_SLICE,
-          payload: {
-            ids: v.ids,
-            numPartitions,
-            partitionFunc: serialize(
-              (data: any[]) => {
-                const ret: any[][] = new Array(numPartitions)
-                  .fill(0)
-                  .map(v => []);
-                for (const item of data) {
-                  const id = partitionFunc(item);
-                  ret[id].push(item);
-                }
-                return ret;
-              },
-              {
-                numPartitions,
-                partitionFunc,
-              },
-            ),
-            args: [],
-          },
-        }),
+      tasks.map(
+        v =>
+          v.worker.processRequest({
+            type: workerActions.REPARTITION_SLICE,
+            payload: {
+              ids: v.ids,
+              numPartitions,
+              partitionFunc: serialize(
+                (data: T[]) => {
+                  const ret: T[][] = new Array(numPartitions)
+                    .fill(0)
+                    .map(v => []);
+                  for (const item of data) {
+                    const id = partitionFunc(item);
+                    ret[id].push(item);
+                  }
+                  return ret;
+                },
+                {
+                  numPartitions,
+                  partitionFunc,
+                },
+              ),
+              args: [],
+            },
+          }) as Promise<PartId[][]>,
       ),
     );
 
@@ -310,18 +314,18 @@ registerHandler(
       );
       partitionIndex += subCount;
     }
-    return ([] as any[]).concat(...(await Promise.all(result)));
+    return ([] as Partition[]).concat(...(await Promise.all(result)));
   },
 );
 
 registerHandler(
   COALESCE,
-  async (
+  async <T>(
     {
       subRequest,
       numPartitions,
     }: {
-      subRequest: Request;
+      subRequest: Request<any>;
       numPartitions: number;
     },
     context: MasterServer,
@@ -336,14 +340,15 @@ registerHandler(
     const counts = flatWorkerResult(
       tasks,
       await Promise.all(
-        tasks.map(v =>
-          v.worker.processRequest({
-            type: workerActions.REDUCE,
-            payload: {
-              ids: v.ids,
-              func: serialize((arr: any[]) => arr.length),
-            },
-          }),
+        tasks.map(
+          v =>
+            v.worker.processRequest({
+              type: workerActions.REDUCE,
+              payload: {
+                ids: v.ids,
+                func: serialize((arr: T[]) => arr.length),
+              },
+            }) as Promise<number[]>,
         ),
       ),
     );
@@ -379,27 +384,28 @@ registerHandler(
     // Remote mode: return a rdd id & worker host & port.
     // Empty part will return null.
     let pieces = await Promise.all(
-      tasks.map(v =>
-        v.worker.processRequest({
-          type: workerActions.REPARTITION_SLICE,
-          payload: {
-            ids: v.ids,
-            numPartitions,
-            partitionFunc: serialize(
-              (data: any[], arg: [number, number, number][]) => {
-                const ret: any[][] = new Array(numPartitions).fill(null);
-                for (const item of arg) {
-                  ret[item[0]] = data.slice(item[1], item[1] + item[2]);
-                }
-                return ret;
-              },
-              {
-                numPartitions,
-              },
-            ),
-            args: v.indecies.map(i => args[i]),
-          },
-        }),
+      tasks.map(
+        v =>
+          v.worker.processRequest({
+            type: workerActions.REPARTITION_SLICE,
+            payload: {
+              ids: v.ids,
+              numPartitions,
+              partitionFunc: serialize(
+                (data: T[], arg: [number, number, number][]) => {
+                  const ret: T[][] = new Array(numPartitions).fill(null);
+                  for (const item of arg) {
+                    ret[item[0]] = data.slice(item[1], item[1] + item[2]);
+                  }
+                  return ret;
+                },
+                {
+                  numPartitions,
+                },
+              ),
+              args: v.indecies.map(i => args[i]),
+            },
+          }) as Promise<string[]>,
       ),
     );
 
@@ -446,6 +452,6 @@ registerHandler(
       );
       partitionIndex += subCount;
     }
-    return ([] as any[]).concat(...(await Promise.all(result)));
+    return ([] as Partition[]).concat(...(await Promise.all(result)));
   },
 );

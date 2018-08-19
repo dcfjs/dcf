@@ -29,7 +29,7 @@ export class LocalMaster extends MasterServer {
       await fs.rmdir('tmp');
     } catch (e) {}
   }
-  async processRequest(m: Request): Promise<any> {
+  async processRequest<T>(m: Request<T>): Promise<any> {
     return processRequest(m, this);
   }
 }

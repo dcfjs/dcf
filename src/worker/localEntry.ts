@@ -6,7 +6,7 @@ if (!process.send) {
   throw new Error('This entry must be loaded by local master!');
 }
 
-const queue: Request[] = [];
+const queue: Request<any>[] = [];
 
 async function processNextRequest() {
   try {
@@ -32,7 +32,7 @@ async function processNextRequest() {
   }
 }
 
-process.on('message', (m: Request) => {
+process.on('message', <T>(m: Request<T>) => {
   queue.push(m);
   if (queue.length === 1) {
     processNextRequest();

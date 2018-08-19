@@ -10,7 +10,7 @@ export class LocalClient implements Client {
   dispose(): Promise<void> {
     return this.master.dispose();
   }
-  request(m: Request): Promise<Response> {
+  request<T>(m: Request<T>): Promise<Response<any>> {
     return this.master.processRequest(m);
   }
   workerCount() {

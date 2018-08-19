@@ -6,7 +6,7 @@ export class MasterServer {
 
   async init(): Promise<void> {}
   async dispose(): Promise<void> {}
-  processRequest(m: Request): Promise<any> {
+  processRequest<T>(m: Request<T>): Promise<any> {
     throw new Error('Should be implemented.');
   }
 }
