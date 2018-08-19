@@ -15,6 +15,18 @@ class RDD<T> {
     this.generateTask = generateTask;
   }
 
+  async collect(): Promise<T[][]> {
+    return this.context.client.request({
+      type: REDUCE,
+      payload: {
+        subRequest: await this.generateTask(this),
+        partitionFunc: serialize((data: any[]) => data),
+        finalFunc: serialize((results: any[][]) => {
+          return results;
+        }),
+      },
+    });
+  }
   async take(count: number): Promise<T[]> {
     return this.context.client.request({
       type: REDUCE,
