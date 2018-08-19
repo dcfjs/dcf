@@ -106,8 +106,8 @@ class RDD<T> {
       },
     });
   }
-  map<T1>(
-    func: ((v: T) => T1) | SerializeFunction,
+  mapPartitions<T1>(
+    func: ((v: T[]) => T1[]) | SerializeFunction,
     env?: FunctionEnv,
   ): RDD<T1> {
     const serializedFunc =
@@ -116,12 +116,23 @@ class RDD<T> {
       type: MAP,
       payload: {
         subRequest: await this.generateTask(this),
-        func: serialize((partition: any[]) => partition.map(func as any), {
-          func: serializedFunc,
-        }),
+        func: serializedFunc,
       },
     });
     return new RDD<T1>(this.context, generateTask);
+  }
+  map<T1>(
+    func: ((v: T) => T1) | SerializeFunction,
+    env?: FunctionEnv,
+  ): RDD<T1> {
+    const serializedFunc =
+      typeof func === 'function' ? serialize(func, env) : func;
+    return this.mapPartitions(
+      (partition: any[]) => partition.map(func as any),
+      {
+        func: serializedFunc,
+      },
+    );
   }
   filter(
     func: ((v: T) => boolean) | SerializeFunction,
@@ -130,16 +141,12 @@ class RDD<T> {
     const serializedFunc =
       typeof func === 'function' ? serialize(func, env) : func;
 
-    const generateTask = async (): Promise<Request> => ({
-      type: MAP,
-      payload: {
-        subRequest: await this.generateTask(this),
-        func: serialize((partition: any[]) => partition.filter(func as any), {
-          func: serializedFunc,
-        }),
+    return this.mapPartitions(
+      (partition: any[]) => partition.filter(func as any),
+      {
+        func: serializedFunc,
       },
-    });
-    return new RDD<T>(this.context, generateTask);
+    );
   }
   repartition(numPartitions: number): RDD<T> {
     return this.partitionBy(
