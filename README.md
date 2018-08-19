@@ -24,12 +24,14 @@ await dcc
 - [x] local master.
 - [x] rdd & partition creation & release.
 - [x] map & reduce
-- [x] drop empty partition
 - [ ] repartition & reduceByKey
+- [ ] distributed master.
+- [ ] disk storage partitions
+- [ ] cache
+- [ ] use debug module for information/error
+- [ ] add configure system.
 - [ ] file loader/aliyun oss loader
 - [ ] decompresser
-- [ ] distributed master.
-- [ ] use debug module for information/error
 
 ## How to use
 

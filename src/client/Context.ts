@@ -1,6 +1,6 @@
 import { SerializeFunction, FunctionEnv } from './../common/SerializeFunction';
 import { PartitionType } from './../common/types';
-import { REDUCE, CREATE_RDD, MAP } from './../master/handlers';
+import { REDUCE, CREATE_RDD, MAP, REPARTITION } from './../master/handlers';
 import { Client, Request } from './Client';
 import { serialize } from '../common/SerializeFunction';
 
@@ -137,6 +137,33 @@ class RDD<T> {
         func: serialize((partition: any[]) => partition.filter(func as any), {
           func: serializedFunc,
         }),
+      },
+    });
+    return new RDD<T>(this.context, generateTask);
+  }
+  repartition(numPartitions: number): RDD<T> {
+    return this.partitionBy(
+      numPartitions,
+      () => Math.floor(Math.random() * numPartitions),
+      { numPartitions },
+    );
+  }
+  partitionBy(
+    numPartitions: number,
+    partitionFunc: ((v: T) => number) | SerializeFunction,
+    env?: FunctionEnv,
+  ) {
+    const serializedFunc =
+      typeof partitionFunc === 'function'
+        ? serialize(partitionFunc, env)
+        : partitionFunc;
+
+    const generateTask = async (): Promise<Request> => ({
+      type: REPARTITION,
+      payload: {
+        subRequest: await this.generateTask(this),
+        numPartitions,
+        partitionFunc: serializedFunc,
       },
     });
     return new RDD<T>(this.context, generateTask);

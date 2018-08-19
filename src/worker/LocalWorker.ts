@@ -31,7 +31,10 @@ export class LocalWorker implements WorkerClient {
     this.worker.on('exit', this.onExit);
     await this.processRequest({
       type: INIT,
-      payload: this.id,
+      payload: {
+        id: this.id,
+        mode: 'local',
+      },
     });
   }
   onMessage = (r: Response) => {

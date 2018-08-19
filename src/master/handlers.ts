@@ -14,6 +14,7 @@ import { PartitionType } from '../common/types';
 export const CREATE_RDD = '@@master/createRDD';
 export const MAP = '@@master/map';
 export const REDUCE = '@@master/reduce';
+export const REPARTITION = '@@master/REPARTITION';
 
 export const LOAD_CACHE = '@@master/loadCache';
 
@@ -73,12 +74,12 @@ registerHandler(
   CREATE_RDD,
   async (
     {
-      partitionCount,
+      numPartitions,
       creator,
       args,
       type,
     }: {
-      partitionCount?: number;
+      numPartitions?: number;
       creator: SerializeFunction;
       args: any[];
       type: PartitionType;
@@ -86,9 +87,9 @@ registerHandler(
     context: MasterServer,
   ) => {
     const workerCount = context.workers.length;
-    partitionCount = partitionCount == null ? workerCount : partitionCount;
-    const rest = partitionCount % workerCount;
-    const eachCount = (partitionCount - rest) / workerCount;
+    numPartitions = numPartitions == null ? workerCount : numPartitions;
+    const rest = numPartitions % workerCount;
+    const eachCount = (numPartitions - rest) / workerCount;
 
     const result: Promise<Partition[]>[] = [];
 
@@ -149,11 +150,7 @@ registerHandler(
           }),
         ),
       ),
-    )
-      .map(
-        (v, i) => (v != null ? new Partition(subPartitions[i].worker, v) : v),
-      )
-      .filter(v => v);
+    ).map((v, i) => new Partition(subPartitions[i].worker, v));
 
     if (subRequest.type !== LOAD_CACHE) {
       await Promise.all(
@@ -214,5 +211,88 @@ registerHandler(
     }
     const func = deserialize(finalFunc);
     return func(results);
+  },
+);
+
+registerHandler(
+  REPARTITION,
+  async (
+    {
+      subRequest,
+      numPartitions,
+      partitionFunc,
+    }: {
+      subRequest: Request;
+      numPartitions: number;
+      partitionFunc: SerializeFunction;
+    },
+    context: MasterServer,
+  ) => {
+    const partitions: Partition[] = await context.processRequest(subRequest);
+    const tasks = groupByWorker(partitions);
+
+    // Step1: split each partitions to numPartitions parts, and collect their information
+    // Local mode: return a local file name.
+    // Remote mode: return a rdd id & worker host & port.
+    // Empty part will return null.
+    const pieceGroups = await Promise.all(
+      tasks.map(v =>
+        v.worker.processRequest({
+          type: workerActions.REPARTITION_SLICE,
+          payload: {
+            ids: v.ids,
+            numPartitions,
+            partitionFunc,
+          },
+        }),
+      ),
+    );
+    let pieces = flatWorkerResult(tasks, pieceGroups);
+
+    // Release dependencies
+    if (subRequest.type !== LOAD_CACHE) {
+      await Promise.all(
+        tasks.map(v =>
+          v.worker.processRequest({
+            type: workerActions.RELEASE,
+            payload: v.ids,
+          }),
+        ),
+      );
+    }
+
+    // projection pieces from [oldPartition][newPartition] to [newPartition][oldPartition]
+    pieces = new Array(numPartitions)
+      .fill(0)
+      .map((v, i) => pieces.map(v => v[i]));
+
+    // Step2: regenerate new partitions. and release parts.
+    const workerCount = context.workers.length;
+    numPartitions = numPartitions == null ? workerCount : numPartitions;
+    const rest = numPartitions % workerCount;
+    const eachCount = (numPartitions - rest) / workerCount;
+
+    const result: Promise<Partition[]>[] = [];
+
+    let partitionIndex = 0;
+
+    for (let i = 0; i < workerCount; i++) {
+      const subCount = i < rest ? eachCount + 1 : eachCount;
+      if (subCount <= 0) {
+        break;
+      }
+      result.push(
+        (async (): Promise<Partition[]> => {
+          const worker = context.workers[i];
+          const ids = await worker.processRequest({
+            type: workerActions.REPARTITION_JOIN,
+            payload: pieces.slice(partitionIndex, partitionIndex + subCount),
+          });
+          return ids.map((id: string) => new Partition(worker, id));
+        })(),
+      );
+      partitionIndex += subCount;
+    }
+    return ([] as any[]).concat(...(await Promise.all(result)));
   },
 );
