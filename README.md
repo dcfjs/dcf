@@ -25,9 +25,9 @@ await dcc
 - [x] rdd & partition creation & release.
 - [x] map & reduce
 - [x] repartition & reduceByKey
-- [ ] distributed master.
 - [ ] disk storage partitions
 - [ ] cache
+- [ ] distributed master.
 - [ ] use debug module for information/error
 - [ ] add configure system.
 - [ ] file loader/aliyun oss loader
@@ -45,12 +45,15 @@ download this repo, install dependencies
 
 ```bash
 npm install
+# or
+yarn
 ```
 
 Run samples:
 
 ```bash
 npm run ts-node src/samples/tutorial-0.ts
+npm run ts-node src/samples/repartition.ts
 ```
 
 Run interactive cli:
