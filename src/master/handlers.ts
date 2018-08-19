@@ -260,6 +260,7 @@ registerHandler(
                 partitionFunc,
               },
             ),
+            args: [],
           },
         }),
       ),

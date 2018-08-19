@@ -127,25 +127,27 @@ registerHandler(
     ids,
     numPartitions,
     partitionFunc,
+    args,
   }: {
     ids: string[];
     numPartitions: number;
     partitionFunc: SerializeFunction;
+    args: any[];
   }) => {
     const func = deserialize(partitionFunc);
     const ret = await Promise.all(new Array(numPartitions).fill(null));
-    for (const id of ids) {
+    for (const [i, id] of ids.entries()) {
       const partition = getPartitionData(id);
-      const tmp: any[][] = func(partition);
+      const tmp: any[][] = func(partition, args[i]);
       await Promise.all(
-        ret.map(async (id, i) => {
-          if (tmp[i].length === 0) {
+        ret.map(async (id, j) => {
+          if (tmp[j].length === 0) {
             return;
           }
           if (id == null) {
-            id = ret[i] = await createRepartitionPart();
+            id = ret[j] = await createRepartitionPart();
           }
-          return appendRepartitionPart(id, tmp[i]);
+          return appendRepartitionPart(id, tmp[j]);
         }),
       );
     }
