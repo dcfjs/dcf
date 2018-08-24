@@ -7,6 +7,7 @@ const v8 = require('v8');
 export const INIT = '@@worker/init';
 export const EXIT = '@@worker/exit';
 
+export const CALC = '@@worker/calc';
 export const CREATE_PARTITION = '@@worker/createPartition';
 export const MAP = '@@worker/map';
 export const REDUCE = '@@worker/reduce';
@@ -79,6 +80,30 @@ async function getRepartitionPart<T>(id: PartId): Promise<T[]> {
   return ([] as T[]).concat(...ret);
 }
 
+function* generateCalc<Arg, Ret>(
+  inputs: Iterable<Arg>,
+  serializedFuncs: SerializeFunction<(arg: any) => any>[],
+): Iterable<Ret> {
+  const funcs = serializedFuncs.map(v => deserialize(v));
+
+  for (const input of inputs) {
+    yield funcs.reduce((v, func) => func(v), input);
+  }
+}
+
+// V => V
+registerHandler(
+  CALC,
+  ({
+    funcs,
+    args,
+  }: {
+    funcs: SerializeFunction<(arg: any) => any>;
+    args: any[];
+  }) => {},
+);
+
+// V => Partition
 registerHandler(
   CREATE_PARTITION,
   <T, Arg>({
@@ -101,6 +126,7 @@ registerHandler(
   },
 );
 
+// Partition => Partition
 registerHandler(
   MAP,
   <T, T1>({
@@ -115,6 +141,7 @@ registerHandler(
   },
 );
 
+// Partition => V
 registerHandler(
   REDUCE,
   <T, T1>({
