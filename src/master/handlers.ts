@@ -1,14 +1,9 @@
+import { StorageType } from './../common/types';
 import { PartId } from './../worker/handlers';
 import { MasterServer } from './MasterServer';
 import { registerHandler } from '../common/handler';
 import { Request } from '../client/Client';
-import {
-  SerializeFunction,
-  deserialize,
-  serialize,
-} from '../common/SerializeFunction';
-import * as workerActions from '../worker/handlers';
-import { WorkerClient } from '../worker/WorkerClient';
+import { SerializeFunction, deserialize } from '../common/SerializeFunction';
 
 export const CREATE_RDD = '@@master/createRDD';
 export const MAP = '@@master/map';
@@ -16,23 +11,9 @@ export const REDUCE = '@@master/reduce';
 export const REPARTITION = '@@master/repartition';
 export const COALESCE = '@@master/coalesce';
 
+export const CACHE = '@@master/cache';
 export const LOAD_CACHE = '@@master/loadCache';
-
-class Partition {
-  worker: WorkerClient;
-  id: string;
-
-  constructor(worker: WorkerClient, id: string) {
-    this.worker = worker;
-    this.id = id;
-  }
-}
-
-type TaskRecord = {
-  worker: WorkerClient;
-  ids: string[];
-  indecies: number[];
-};
+export const RELEASE_CACHE = '@@master/releaseCache';
 
 registerHandler(
   REDUCE,
@@ -60,3 +41,28 @@ registerHandler(
     return deserialize(finalFunc)(results);
   },
 );
+
+registerHandler(
+  CACHE,
+  async (
+    {
+      subRequest,
+      storageType,
+    }: {
+      subRequest: Request<any>;
+      storageType: StorageType;
+    },
+    context: MasterServer,
+  ) => {
+    const partitions = await context.runWork(subRequest, {
+      type: 'partitions',
+      storageType,
+    });
+
+    return context.addCache(storageType, partitions);
+  },
+);
+
+registerHandler(RELEASE_CACHE, (id: number, context: MasterServer) => {
+  return context.releaseCache(id);
+});

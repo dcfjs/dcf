@@ -1,6 +1,5 @@
 import { LocalClient } from '../client/LocalClient';
 import { Context } from '../client/Context';
-import { serialize } from '../common/SerializeFunction';
 
 // Every calculate API is async so we need async/await:
 async function main() {

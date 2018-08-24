@@ -1,3 +1,4 @@
+import { StorageType } from './../common/types';
 import { FunctionEnv, requireModule } from './../common/SerializeFunction';
 import {
   REDUCE,
@@ -5,6 +6,9 @@ import {
   MAP,
   REPARTITION,
   COALESCE,
+  LOAD_CACHE,
+  RELEASE_CACHE,
+  CACHE,
 } from './../master/handlers';
 import { Client, Request } from './Client';
 import { serialize } from '../common/SerializeFunction';
@@ -26,20 +30,21 @@ function hashPartitionFunc<V>(numPartitions: number) {
   );
 }
 
-class RDD<T> {
+export class RDD<T> {
   context: Context;
-  generateTask: ResponseFactory<T>;
-
-  constructor(context: Context, generateTask: ResponseFactory<T>) {
+  constructor(context: Context) {
     this.context = context;
-    this.generateTask = generateTask;
+  }
+
+  generateTask(): Request<any> | Promise<Request<any>> {
+    throw new Error('Must be overrided.');
   }
 
   async collect(): Promise<T[][]> {
     return this.context.client.request({
       type: REDUCE,
       payload: {
-        subRequest: await this.generateTask(this),
+        subRequest: await this.generateTask(),
         partitionFunc: serialize((data: T[]) => [data]),
         finalFunc: serialize((results: T[][][]) => {
           return ([] as any).concat(...results);
@@ -51,7 +56,7 @@ class RDD<T> {
     return this.context.client.request({
       type: REDUCE,
       payload: {
-        subRequest: await this.generateTask(this),
+        subRequest: await this.generateTask(),
         partitionFunc: serialize((data: T[]) => data.slice(0, count), {
           count,
         }),
@@ -78,7 +83,7 @@ class RDD<T> {
     return this.context.client.request({
       type: REDUCE,
       payload: {
-        subRequest: await this.generateTask(this),
+        subRequest: await this.generateTask(),
         partitionFunc: serialize((data: T[]) => data.length),
         finalFunc: serialize((result: number[]) =>
           result.reduce((a, b) => a + b, 0),
@@ -90,7 +95,7 @@ class RDD<T> {
     return this.context.client.request({
       type: REDUCE,
       payload: {
-        subRequest: await this.generateTask(this),
+        subRequest: await this.generateTask(),
         partitionFunc: serialize((data: (T | null)[]) =>
           data.reduce(
             (a, b) => (a !== null && (b === null || a > b) ? a : b),
@@ -110,7 +115,7 @@ class RDD<T> {
     return this.context.client.request({
       type: REDUCE,
       payload: {
-        subRequest: await this.generateTask(this),
+        subRequest: await this.generateTask(),
         partitionFunc: serialize((data: (T | null)[]) =>
           data.reduce(
             (a, b) => (a !== null && (b === null || a < b) ? a : b),
@@ -133,11 +138,11 @@ class RDD<T> {
     const generateTask = async () => ({
       type: MAP,
       payload: {
-        subRequest: await this.generateTask(this),
+        subRequest: await this.generateTask(),
         func,
       },
     });
-    return new RDD<T1>(this.context, generateTask);
+    return new GeneratedRDD<T1>(this.context, generateTask);
   }
   map<T1>(func: ((v: T) => T1), env?: FunctionEnv): RDD<T1> {
     if (typeof func === 'function') {
@@ -189,22 +194,22 @@ class RDD<T> {
     const generateTask = async () => ({
       type: REPARTITION,
       payload: {
-        subRequest: await this.generateTask(this),
+        subRequest: await this.generateTask(),
         numPartitions,
         partitionFunc: finalPartitionFunc,
       },
     });
-    return new RDD<T>(this.context, generateTask);
+    return new GeneratedRDD<T>(this.context, generateTask);
   }
   coalesce(numPartitions: number) {
     const generateTask = async () => ({
       type: COALESCE,
       payload: {
-        subRequest: await this.generateTask(this),
+        subRequest: await this.generateTask(),
         numPartitions,
       },
     });
-    return new RDD<T>(this.context, generateTask);
+    return new GeneratedRDD<T>(this.context, generateTask);
   }
   reduceByKey<K, V>(
     this: RDD<[K, V]>,
@@ -304,6 +309,59 @@ class RDD<T> {
       .partitionBy(numPartitions, realPartitionFunc)
       .mapPartitions<[K, C]>(mapFunction2);
   }
+  cache(storageType: StorageType = 'memory'): CacheRDD<T> {
+    return new CacheRDD(storageType, this);
+  }
+}
+
+export class GeneratedRDD<T> extends RDD<T> {
+  _generateTask: ResponseFactory<T>;
+
+  constructor(context: Context, generateTask: ResponseFactory<T>) {
+    super(context);
+    this.context = context;
+    this._generateTask = generateTask;
+  }
+
+  generateTask(): Request<any> | Promise<Request<any>> {
+    return this._generateTask(this);
+  }
+}
+
+export class CacheRDD<T> extends RDD<T> {
+  cacheId: number | null = null;
+  dependency: RDD<T>;
+  storageType: StorageType;
+  constructor(storageType: StorageType, dependency: RDD<T>) {
+    super(dependency.context);
+    this.storageType = storageType;
+    this.dependency = dependency;
+  }
+  async generateTask(): Promise<Request<any>> {
+    if (this.cacheId == null) {
+      this.cacheId = await this.context.client.request({
+        type: CACHE,
+        payload: {
+          storageType: this.storageType,
+          subRequest: await this.dependency.generateTask(),
+        },
+      });
+    }
+    return {
+      type: LOAD_CACHE,
+      payload: this.cacheId,
+    };
+  }
+  async release(): Promise<void> {
+    if (this.cacheId != null) {
+      const { cacheId } = this;
+      this.cacheId = null;
+      await this.context.client.request({
+        type: RELEASE_CACHE,
+        payload: cacheId,
+      });
+    }
+  }
 }
 
 export class Context {
@@ -313,7 +371,7 @@ export class Context {
   }
 
   emptyRDD(): RDD<never> {
-    return new RDD<never>(this, () => ({
+    return new GeneratedRDD<never>(this, () => ({
       type: CREATE_RDD,
       payload: {
         partitionCount: 0,
@@ -336,7 +394,7 @@ export class Context {
       index = end;
     }
 
-    return new RDD<T>(this, () => ({
+    return new GeneratedRDD<T>(this, () => ({
       type: CREATE_RDD,
       payload: {
         numPartitions,

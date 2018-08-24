@@ -1,7 +1,7 @@
+import { StorageType } from './../common/types';
 import { WorkerClient } from '../worker/WorkerClient';
 import { Request } from '../client/Client';
 import { SerializeFunction, serialize } from '../common/SerializeFunction';
-import { StorageType } from '../common/types';
 
 import * as workerActions from '../worker/handlers';
 import * as masterActions from './handlers';
@@ -21,8 +21,15 @@ type OutArgs = {
   partitionArgs?: any[];
 };
 
+type CacheRecord = {
+  storageType: StorageType;
+  partitions: string[][];
+};
+
 export class MasterServer {
   workers: WorkerClient[] = [];
+  caches: CacheRecord[] = [];
+  cacheIdCounter: number = 0;
 
   async init(): Promise<void> {}
   async dispose(): Promise<void> {}
@@ -54,51 +61,96 @@ export class MasterServer {
     }
   }
 
-  async createRDD(
-    args: any[],
-    out: OutArgs,
+  async finalWork(
+    ins: InArgs[],
+    out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[],
   ): Promise<any> {
-    const partitionArgs = this.splitByWorker(args);
-
-    let partitionPartitionArgs: any = null;
-
-    if (out.type === 'parts') {
-      partitionPartitionArgs = this.splitByWorker(out.partitionArgs as any[]);
-    }
-
     const works: Promise<any>[] = [];
     for (const [i, worker] of this.workers.entries()) {
-      let tmpOut = out;
-      if (tmpOut.type === 'parts') {
-        tmpOut = {
-          ...out,
-          partitionArgs: partitionPartitionArgs[i],
-        };
-      }
       works.push(
         worker.processRequest({
           type: workerActions.CALC,
           payload: {
-            in: {
-              type: 'value',
-              args: partitionArgs[i],
-            } as InArgs,
+            in: ins[i],
             mappers,
-            out: tmpOut,
+            out: Array.isArray(out) ? out[i] : out,
           },
         }),
       );
     }
-    const results = await Promise.all(works);
-
-    return results;
+    return await Promise.all(works);
   }
 
-  async joinPieces(
+  createRDD(
+    args: any[],
+    out: OutArgs | OutArgs[],
+    mappers: SerializeFunction<(arg: any) => any>[],
+  ): Promise<any> {
+    const partitionArgs = this.splitByWorker(args);
+
+    return this.finalWork(
+      partitionArgs.map(
+        v =>
+          ({
+            type: 'value',
+            args: v,
+          } as InArgs),
+      ),
+      out,
+      mappers,
+    );
+  }
+
+  async addCache(storageType: StorageType, partitions: string[][]) {
+    const id = ++this.cacheIdCounter;
+    this.caches[id] = {
+      storageType,
+      partitions,
+    };
+    return id;
+  }
+
+  loadCache(
+    id: number,
+    out: OutArgs | OutArgs[],
+    mappers: SerializeFunction<(arg: any) => any>[],
+  ): Promise<any> {
+    const { storageType, partitions } = this.caches[id];
+    return this.finalWork(
+      partitions.map(
+        v =>
+          ({
+            type: 'partitions',
+            partitions: v,
+          } as InArgs),
+      ),
+      out,
+      mappers,
+    );
+  }
+  async releaseCache(id: number) {
+    const { storageType, partitions } = this.caches[id];
+    const works = [];
+    for (const [i, worker] of this.workers.entries()) {
+      works.push(
+        worker.processRequest({
+          type: workerActions.RELEASE,
+          payload: {
+            storageType,
+            partitions: partitions[i],
+          },
+        }),
+      );
+    }
+    await Promise.all(works);
+    delete this.caches[id];
+  }
+
+  joinPieces(
     numPartitions: number,
     parts: string[][],
-    out: OutArgs,
+    out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[],
   ): Promise<any> {
     // projection parts from [workers][newPartition] to [newPartition][workers]
@@ -109,25 +161,17 @@ export class MasterServer {
 
     const partitionParts = this.splitByWorker(parts);
 
-    const works: Promise<any>[] = [];
-    for (const [i, worker] of this.workers.entries()) {
-      works.push(
-        worker.processRequest({
-          type: workerActions.CALC,
-          payload: {
-            in: {
-              type: 'parts',
-              parts: partitionParts[i],
-            } as InArgs,
-            mappers,
-            out,
-          },
-        }),
-      );
-    }
-    const results = await Promise.all(works);
-
-    return results;
+    return this.finalWork(
+      partitionParts.map(
+        v =>
+          ({
+            type: 'parts',
+            parts: v,
+          } as InArgs),
+      ),
+      out,
+      mappers,
+    );
   }
 
   getPartitionCount(dependWork: Request<any>): number {
@@ -146,13 +190,12 @@ export class MasterServer {
 
   async runWork(
     dependWork: Request<any>,
-    out: OutArgs,
+    out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[] = [],
   ): Promise<any> {
     const { type, payload } = dependWork;
 
     switch (type) {
-      // Final works:
       case masterActions.CREATE_RDD: {
         const { creator, numPartitions, args } = payload;
         mappers.unshift(creator);
@@ -161,6 +204,11 @@ export class MasterServer {
           out,
           mappers,
         );
+      }
+
+      case masterActions.LOAD_CACHE: {
+        const id: number = payload;
+        return this.loadCache(id, out, mappers);
       }
 
       case masterActions.MAP: {
@@ -207,28 +255,36 @@ export class MasterServer {
         while (partitionArgs.length < originPartitions) {
           partitionArgs.push([numPartitions - 1, []]);
         }
+        const partitionFunc = serialize(
+          (v: any[], arg: [number, number[]]): any => {
+            const ret: any[][] = [];
+            let lastIndex = 0;
+            for (let i = 0; i < arg[0]; i++) {
+              ret.push([]);
+            }
+            for (const rate of arg[1]) {
+              const nextIndex = Math.floor(v.length * rate);
+              ret.push(v.slice(lastIndex, nextIndex));
+              lastIndex = nextIndex;
+            }
+            ret.push(v.slice(lastIndex));
+            return ret;
+          },
+        );
+        const tmp = this.splitByWorker(partitionArgs);
+
         // step 1: splice pieces;
-        let pieces: string[][] = await this.runWork(subRequest, {
-          type: 'parts',
-          partitionFunc: serialize(
-            (v: any[], arg: [number, number[]]): any => {
-              const ret: any[][] = [];
-              let lastIndex = 0;
-              for (let i = 0; i < arg[0]; i++) {
-                ret.push([]);
-              }
-              for (const rate of arg[1]) {
-                const nextIndex = Math.floor(v.length * rate);
-                ret.push(v.slice(lastIndex, nextIndex));
-                lastIndex = nextIndex;
-              }
-              ret.push(v.slice(lastIndex));
-              console.log(v, arg, ret);
-              return ret;
-            },
+        let pieces: string[][] = await this.runWork(
+          subRequest,
+          tmp.map(
+            v =>
+              ({
+                type: 'parts',
+                partitionFunc,
+                partitionArgs: v,
+              } as OutArgs),
           ),
-          partitionArgs,
-        });
+        );
 
         // Step 2: join pieces and go on.
         return this.joinPieces(numPartitions, pieces, out, mappers);

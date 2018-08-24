@@ -12,7 +12,7 @@ async function main() {
   const dcc = new Context(client);
 
   // Create a new rdd.
-  const rdd = dcc.parallelize([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  const rdd = dcc.parallelize([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).cache();
 
   // Do some task:
   console.log(await rdd.count());
@@ -43,6 +43,7 @@ async function main() {
       .take(10),
   );
 
+  await rdd.release();
   // Shutdown
   client.dispose();
 }

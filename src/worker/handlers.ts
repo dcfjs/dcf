@@ -183,8 +183,17 @@ registerHandler(
   },
 );
 
-registerHandler(RELEASE, (ids: string[]) => {
-  for (const id of ids) {
-    releasePartition(id);
-  }
-});
+registerHandler(
+  RELEASE,
+  ({
+    storageType,
+    partitions,
+  }: {
+    storageType: StorageType;
+    partitions: string[];
+  }) => {
+    for (const id of partitions) {
+      releasePartition(id);
+    }
+  },
+);
