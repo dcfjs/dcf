@@ -122,6 +122,7 @@ export class MasterServer {
         v =>
           ({
             type: 'partitions',
+            storageType,
             partitions: v,
           } as InArgs),
       ),

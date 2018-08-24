@@ -40,18 +40,54 @@ registerHandler(EXIT, () => {
 const partitions: { [key: string]: any[] } = {};
 let idCounter = 0;
 
-function saveNewPartition<T>(data: T[]) {
+async function saveNewPartition<T>(storageType: StorageType, data: T[]) {
   const id = `rdd-${++idCounter}`;
-  partitions[id] = data;
+  switch (storageType) {
+    case 'disk': {
+      const buf = v8.serialize(data);
+      await fs.writeFile(`tmp/${wid}-${id}.partition`, buf);
+    }
+    case 'memory':
+      partitions[id] = data;
+      break;
+    default:
+      throw new Error(`Unsupported storageType ${storageType}`);
+  }
   return id;
 }
 
-function getPartitionData<T>(id: string): T[] {
-  return partitions[id];
+async function getPartitionData<T>(
+  storageType: StorageType,
+  id: string,
+): Promise<T[]> {
+  switch (storageType) {
+    case 'disk': {
+      const buf = await fs.readFile(`tmp/${wid}-${id}.partition`);
+      return v8.deserialize(buf);
+    }
+    case 'memory':
+      return partitions[id];
+    default:
+      throw new Error(`Unsupported storageType ${storageType}`);
+  }
 }
 
-function releasePartition(id: string) {
-  delete partitions[id];
+async function releasePartition(
+  storageType: StorageType,
+  id: string,
+): Promise<void> {
+  switch (storageType) {
+    case 'disk': {
+      await fs.unlink(`tmp/${wid}-${id}.partition`);
+      break;
+    }
+    case 'memory': {
+      delete partitions[id];
+      break;
+    }
+    default:
+      throw new Error(`Unsupported storageType ${storageType}`);
+  }
 }
 
 async function createRepartitionPart() {
@@ -85,7 +121,7 @@ async function getRepartitionPart<T>(id: PartId): Promise<T[]> {
 registerHandler(
   CALC,
   async ({
-    in: { type: inType, args, partitions, parts },
+    in: { type: inType, args, partitions, parts, storageType: inStorageType },
     mappers,
     out: {
       type: outType,
@@ -98,6 +134,7 @@ registerHandler(
     in: {
       type: 'value' | 'partitions' | 'parts';
       args: any[];
+      storageType: StorageType;
       partitions: string[];
       parts: string[][];
     };
@@ -131,7 +168,7 @@ registerHandler(
           break;
         }
         case 'partitions': {
-          results.push(await saveNewPartition(ret));
+          results.push(await saveNewPartition(storageType, ret));
           break;
         }
         case 'parts': {
@@ -161,7 +198,7 @@ registerHandler(
       }
       case 'partitions': {
         for (const id of partitions) {
-          await work(getPartitionData(id));
+          await work(await getPartitionData(inStorageType, id));
         }
         break;
       }
@@ -185,15 +222,13 @@ registerHandler(
 
 registerHandler(
   RELEASE,
-  ({
+  async ({
     storageType,
     partitions,
   }: {
     storageType: StorageType;
     partitions: string[];
   }) => {
-    for (const id of partitions) {
-      releasePartition(id);
-    }
+    await Promise.all(partitions.map(id => releasePartition(storageType, id)));
   },
 );

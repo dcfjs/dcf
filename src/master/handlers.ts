@@ -1,5 +1,4 @@
 import { StorageType } from './../common/types';
-import { PartId } from './../worker/handlers';
 import { MasterServer } from './MasterServer';
 import { registerHandler } from '../common/handler';
 import { Request } from '../client/Client';
