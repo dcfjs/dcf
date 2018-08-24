@@ -171,12 +171,27 @@ class RDD<T> {
       partitionFunc = serialize(partitionFunc, env);
     }
 
+    const finalPartitionFunc = serialize(
+      (data: any[]) => {
+        const ret: any[][] = new Array(numPartitions).fill(0).map(v => []);
+        for (const item of data) {
+          const id = partitionFunc(item);
+          ret[id].push(item);
+        }
+        return ret;
+      },
+      {
+        numPartitions,
+        partitionFunc,
+      },
+    );
+
     const generateTask = async () => ({
       type: REPARTITION,
       payload: {
         subRequest: await this.generateTask(this),
         numPartitions,
-        partitionFunc,
+        partitionFunc: finalPartitionFunc,
       },
     });
     return new RDD<T>(this.context, generateTask);

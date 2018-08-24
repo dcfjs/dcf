@@ -46,4 +46,4 @@ async function main() {
   // Shutdown
   client.dispose();
 }
-main();
+main().catch(e => console.error(e.stack));
