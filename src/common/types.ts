@@ -1,1 +1,1 @@
-export type PartitionType = 'memory' | 'disk';
+export type StorageType = 'memory' | 'disk';

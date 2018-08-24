@@ -40,9 +40,9 @@ class RDD<T> {
       type: REDUCE,
       payload: {
         subRequest: await this.generateTask(this),
-        partitionFunc: serialize((data: T[]) => data),
-        finalFunc: serialize((results: T[][]) => {
-          return results;
+        partitionFunc: serialize((data: T[]) => [data]),
+        finalFunc: serialize((results: T[][][]) => {
+          return ([] as any).concat(...results);
         }),
       },
     });
@@ -306,15 +306,15 @@ export class Context {
     }));
   }
 
-  parallelize<T>(arr: T[], numSlice?: number): RDD<T> {
-    numSlice = numSlice || this.client.workerCount();
+  parallelize<T>(arr: T[], numPartitions?: number): RDD<T> {
+    numPartitions = numPartitions || this.client.workerCount();
     const args: T[][] = [];
 
-    const rest = arr.length % numSlice;
-    const eachCount = (arr.length - rest) / numSlice;
+    const rest = arr.length % numPartitions;
+    const eachCount = (arr.length - rest) / numPartitions;
 
     let index = 0;
-    for (let i = 0; i < numSlice; i++) {
+    for (let i = 0; i < numPartitions; i++) {
       const subCount = i < rest ? eachCount + 1 : eachCount;
       const end = index + subCount;
       args.push(arr.slice(index, end));
@@ -324,9 +324,9 @@ export class Context {
     return new RDD<T>(this, () => ({
       type: CREATE_RDD,
       payload: {
-        partitionCount: numSlice,
+        numPartitions,
         creator: serialize((arg: T[]) => arg),
-        args: args,
+        args,
         type: 'memory',
       },
     }));

@@ -1,6 +1,6 @@
 import { SerializeFunction, deserialize } from '../common/SerializeFunction';
 import { registerHandler } from '../common/handler';
-import { PartitionType } from '../common/types';
+import { StorageType } from '../common/types';
 import { promises as fs } from 'fs';
 const v8 = require('v8');
 
@@ -15,6 +15,7 @@ export const RELEASE = '@@worker/release';
 
 export const REPARTITION_SLICE = '@@worker/repartitionSlice';
 export const REPARTITION_JOIN = '@@worker/repartitionJoin';
+export const REPARTITION_REDUCE = '@@worker/repartitionJoin';
 export const REPARTITION_RELEASE = '@@worker/repartitionRelease';
 
 export type WorkerMode = 'network' | 'local';
@@ -80,79 +81,105 @@ async function getRepartitionPart<T>(id: PartId): Promise<T[]> {
   return ([] as T[]).concat(...ret);
 }
 
-function* generateCalc<Arg, Ret>(
-  inputs: Iterable<Arg>,
-  serializedFuncs: SerializeFunction<(arg: any) => any>[],
-): Iterable<Ret> {
-  const funcs = serializedFuncs.map(v => deserialize(v));
-
-  for (const input of inputs) {
-    yield funcs.reduce((v, func) => func(v), input);
-  }
-}
-
-// V => V
+// V[] | PARTITION | PARTS => V | PARTITION | PARTS
 registerHandler(
   CALC,
-  ({
-    funcs,
-    args,
+  async ({
+    in: { type: inType, args, partitions, parts },
+    mappers,
+    out: {
+      type: outType,
+      storageType,
+      finalReducer,
+      partitionFunc,
+      partitionArgs,
+    },
   }: {
-    funcs: SerializeFunction<(arg: any) => any>;
-    args: any[];
-  }) => {},
-);
-
-// V => Partition
-registerHandler(
-  CREATE_PARTITION,
-  <T, Arg>({
-    type,
-    creator,
-    count,
-    args,
-  }: {
-    type: PartitionType;
-    creator: SerializeFunction<(arg: Arg) => T[]>;
-    count: number;
-    args: Arg[];
+    in: {
+      type: 'value' | 'partitions' | 'parts';
+      args: any[];
+      partitions: string[];
+      parts: string[][];
+    };
+    mappers: SerializeFunction<(arg: any) => any>[];
+    out: {
+      type: 'reduce' | 'partitions' | 'parts';
+      storageType: StorageType;
+      finalReducer: SerializeFunction<(results: any[]) => any>;
+      partitionFunc: SerializeFunction<(v: any[], arg: any) => any[][]>;
+      partitionArgs: any[];
+    };
   }) => {
-    const func = deserialize(creator);
-    const ret: (string | null)[] = [];
-    for (let i = 0; i < count; i++) {
-      ret.push(saveNewPartition(func(args[i])));
+    const results: any[] = [];
+    const funcs = mappers.map(v => deserialize(v));
+
+    const doPartition = (outType === 'parts' && deserialize(partitionFunc)) as (
+      v: any[],
+      arg: any,
+    ) => any[][];
+
+    let index = 0;
+    async function work(partition: any) {
+      let ret = partition;
+      for (const func of funcs) {
+        ret = func(ret);
+      }
+
+      switch (outType) {
+        case 'reduce': {
+          results.push(ret);
+          break;
+        }
+        case 'partitions': {
+          results.push(await saveNewPartition(ret));
+          break;
+        }
+        case 'parts': {
+          const tmp = doPartition(ret, partitionArgs[index++]);
+          await Promise.all(
+            tmp.map(async (v, j) => {
+              if (!v || v.length === 0) {
+                return;
+              }
+              let id = results[j];
+              if (id == null) {
+                id = results[j] = await createRepartitionPart();
+              }
+              return appendRepartitionPart(id, tmp[j]);
+            }),
+          );
+          break;
+        }
+      }
     }
-    return ret;
-  },
-);
-
-// Partition => Partition
-registerHandler(
-  MAP,
-  <T, T1>({
-    ids,
-    func,
-  }: {
-    ids: string[];
-    func: SerializeFunction<(v: T[]) => T1[]>;
-  }) => {
-    const f = deserialize(func);
-    return ids.map(id => saveNewPartition(f(partitions[id])));
-  },
-);
-
-// Partition => V
-registerHandler(
-  REDUCE,
-  <T, T1>({
-    ids,
-    func,
-  }: {
-    ids: string[];
-    func: SerializeFunction<(v: T[]) => T1>;
-  }) => {
-    const f = deserialize(func);
-    return ids.map(id => f(getPartitionData(id)));
+    switch (inType) {
+      case 'value': {
+        for (const arg of args) {
+          await work(arg);
+        }
+        break;
+      }
+      case 'partitions': {
+        for (const id of partitions) {
+          await work(getPartitionData(id));
+        }
+        break;
+      }
+      case 'parts': {
+        for (const part of parts) {
+          const pieces = await Promise.all(
+            part.map(v => getRepartitionPart(v)),
+          );
+          let v: any = ([] as any).concat(...pieces);
+          await work(v);
+        }
+        break;
+      }
+    }
+    if (outType === 'reduce') {
+      return deserialize(finalReducer)(results);
+    }
+    return results;
   },
 );
 
@@ -160,52 +187,4 @@ registerHandler(RELEASE, (ids: string[]) => {
   for (const id of ids) {
     releasePartition(id);
   }
-});
-
-registerHandler(
-  REPARTITION_SLICE,
-  async <T, Arg>({
-    ids,
-    numPartitions,
-    partitionFunc,
-    args,
-  }: {
-    ids: string[];
-    numPartitions: number;
-    partitionFunc: SerializeFunction<(v: T[], arg: Arg) => T[][]>;
-    args: Arg[];
-  }) => {
-    const func = deserialize(partitionFunc);
-    const ret = await Promise.all(new Array(numPartitions).fill(null));
-    for (const [i, id] of ids.entries()) {
-      const partition = getPartitionData<T>(id);
-      const tmp: T[][] = func(partition, args[i]);
-      await Promise.all(
-        ret.map(async (id, j) => {
-          if (!tmp[j] || tmp[j].length === 0) {
-            return;
-          }
-          if (id == null) {
-            id = ret[j] = await createRepartitionPart();
-          }
-          return appendRepartitionPart(id, tmp[j]);
-        }),
-      );
-    }
-    return ret;
-  },
-);
-
-registerHandler(REPARTITION_JOIN, async <T>(partsList: string[][]) => {
-  const partitions = [];
-
-  // serial for each new parition, parallel for parts.
-  for (const parts of partsList) {
-    const datas: T[][] = await Promise.all(
-      parts.map(v => getRepartitionPart<T>(v)),
-    );
-
-    partitions.push(saveNewPartition(([] as T[]).concat(...datas)));
-  }
-  return partitions;
 });

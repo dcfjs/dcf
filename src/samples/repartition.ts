@@ -16,7 +16,7 @@ async function main() {
 
   console.log(await rdd.repartition(2).collect());
 
-  console.log(await rdd.coalesce(2).collect());
+  // console.log(await rdd.coalesce(2).collect());
 
   const rdd1 = dcc.parallelize<[string, number]>([
     ['a', 1],
