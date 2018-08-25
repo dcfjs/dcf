@@ -123,13 +123,7 @@ registerHandler(
   async ({
     in: { type: inType, args, partitions, parts, storageType: inStorageType },
     mappers,
-    out: {
-      type: outType,
-      storageType,
-      finalReducer,
-      partitionFunc,
-      partitionArgs,
-    },
+    out: { type: outType, storageType, partitionFunc, args: outArgs },
   }: {
     in: {
       type: 'value' | 'partitions' | 'parts';
@@ -142,9 +136,8 @@ registerHandler(
     out: {
       type: 'reduce' | 'partitions' | 'parts';
       storageType: StorageType;
-      finalReducer: SerializeFunction<(results: any[]) => any>;
       partitionFunc: SerializeFunction<(v: any[], arg: any) => any[][]>;
-      partitionArgs: any[];
+      args: any[];
     };
   }) => {
     const results: any[] = [];
@@ -172,7 +165,7 @@ registerHandler(
           break;
         }
         case 'parts': {
-          const tmp = doPartition(ret, partitionArgs[index++]);
+          const tmp = doPartition(ret, outArgs[index++]);
           await Promise.all(
             tmp.map(async (v, j) => {
               if (!v || v.length === 0) {

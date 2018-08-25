@@ -16,9 +16,8 @@ type InArgs = {
 type OutArgs = {
   type: 'reduce' | 'partitions' | 'parts';
   storageType?: StorageType;
-  finalReducer?: SerializeFunction<(results: any[]) => any>;
   partitionFunc?: SerializeFunction<(v: any[], arg: any) => any[][]>;
-  partitionArgs?: any[];
+  args?: any[];
 };
 
 type Partition = [number, string];
@@ -113,6 +112,9 @@ export class MasterServer {
       const workerOut = Array.isArray(out) ? out[i] : out;
       if (workerOut.type === 'partitions') {
         resp[i] = resp[i].map((v: string) => [i, v] as Partition);
+      }
+      if (workerOut.type === 'parts') {
+        return resp;
       }
     }
     return this.mergeWorkerResult(resp);
@@ -268,9 +270,6 @@ export class MasterServer {
       case masterActions.LOAD_FILE: {
         const { baseUrl, recursive } = payload;
         const loader = await this.getFileLoader(baseUrl, 'load');
-        if (!loader) {
-          throw new Error(`No valid loader for url ${baseUrl}`);
-        }
         const files = await loader.listFiles(baseUrl, recursive);
         return files.length;
       }
@@ -284,13 +283,13 @@ export class MasterServer {
   async getFileLoader(
     baseUrl: string,
     type: 'load' | 'save',
-  ): Promise<FileLoader | null> {
+  ): Promise<FileLoader> {
     for (const loader of this.fileLoaderRegistry) {
       if (await loader.canHandleUrl(baseUrl, type)) {
         return loader;
       }
     }
-    return null;
+    throw new Error(`No valid loader for url ${baseUrl}`);
   }
 
   async loadFile(
@@ -300,9 +299,6 @@ export class MasterServer {
     mappers: SerializeFunction<(arg: any) => any>[],
   ): Promise<any[]> {
     const loader = await this.getFileLoader(baseUrl, 'load');
-    if (!loader) {
-      throw new Error(`No valid loader for url ${baseUrl}`);
-    }
     const files = await loader.listFiles(baseUrl, recursive);
     const func = loader.createDataLoader(baseUrl);
     mappers.unshift(
@@ -361,7 +357,7 @@ export class MasterServer {
         let pieces: string[][] = await this.runWork(subRequest, {
           type: 'parts',
           partitionFunc,
-          partitionArgs: [],
+          args: [],
         });
 
         // Step 2: join pieces and go on.
@@ -419,7 +415,7 @@ export class MasterServer {
               ({
                 type: 'parts',
                 partitionFunc,
-                partitionArgs: v,
+                args: v,
               } as OutArgs),
           ),
         );

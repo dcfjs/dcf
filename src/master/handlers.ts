@@ -12,6 +12,7 @@ export const COALESCE = '@@master/coalesce';
 export const CONCAT = '@@master/concat';
 export const LOAD_FILE = '@@master/loadFile';
 export const GET_NUM_PARTITIONS = '@@master/getNumPartitions';
+export const SAVE_FILE = '@@master/saveFile';
 
 export const CACHE = '@@master/cache';
 export const LOAD_CACHE = '@@master/loadCache';
@@ -41,6 +42,24 @@ registerHandler(
     );
 
     return deserialize(finalFunc)(results);
+  },
+);
+
+registerHandler(
+  SAVE_FILE,
+  async <T, T1>(
+    {
+      subRequest,
+      baseUrl,
+      overwrite = true,
+    }: {
+      subRequest: Request<any>;
+      baseUrl: string;
+      overwrite?: boolean;
+    },
+    context: MasterServer,
+  ) => {
+    const fileLoader = context.getFileLoader(baseUrl, 'save');
   },
 );
 
