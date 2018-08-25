@@ -383,6 +383,55 @@ export class Context {
     }));
   }
 
+  range(
+    from: number,
+    to: number,
+    step: number = 1,
+    numPartitions?: number,
+  ): RDD<number> {
+    numPartitions = numPartitions || this.client.workerCount();
+    const finalCount = Math.ceil((to - from) / step);
+
+    const rest = finalCount % numPartitions;
+    const eachCount = (finalCount - rest) / numPartitions;
+
+    interface Arg {
+      from: number;
+      count: number;
+    }
+
+    const args: Arg[] = [];
+    let index = 0;
+    for (let i = 0; i < numPartitions; i++) {
+      const subCount = i < rest ? eachCount + 1 : eachCount;
+      const end = index + subCount;
+      args.push({
+        from: from + step * index,
+        count: subCount,
+      });
+      index = end;
+    }
+
+    return new GeneratedRDD<number>(this, () => ({
+      type: CREATE_RDD,
+      payload: {
+        numPartitions,
+        creator: serialize(
+          ({ from, count }: Arg) => {
+            const ret = [];
+            for (let i = 0; i < count; i++) {
+              ret.push(from + step * i);
+            }
+            return ret;
+          },
+          { step },
+        ),
+        args,
+        type: 'memory',
+      },
+    }));
+  }
+
   parallelize<T>(arr: T[], numPartitions?: number): RDD<T> {
     numPartitions = numPartitions || this.client.workerCount();
     const args: T[][] = [];
