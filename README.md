@@ -28,7 +28,7 @@ await dcc
 - [x] disk storage partitions
 - [x] cache
 - [x] file loader & saver
-- [ ] export module to npm
+- [x] export module to npm
 - [ ] distributed master.
 - [ ] use debug module for information/error
 - [ ] decompresser & compresser
@@ -38,9 +38,25 @@ await dcc
 
 ## How to use
 
-#### Install from npm
+#### Install from npm(shell only)
 
-Not available yet.
+```
+npm install -g dcf
+#or
+yarn global add dcf
+```
+
+Then you can use command: `dcf-shell`
+
+#### Install from npm(as dependency)
+
+```
+npm install --save dcf
+#or
+yarn add dcf
+```
+
+Then you can use dcf with javascript or typescript.
 
 #### Run samples & cli
 
