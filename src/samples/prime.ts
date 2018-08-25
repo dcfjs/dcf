@@ -28,9 +28,9 @@ async function main() {
 
   console.log(await numbers.filter(isPrime).count());
 
-  await numbers.filter(isPrime).saveAsTextFile('./prime');
-
   console.log(`cost ${Date.now() - start} ms`);
+
+  await numbers.filter(isPrime).saveAsTextFile('./prime');
 
   console.log('Normal:');
   start = Date.now();

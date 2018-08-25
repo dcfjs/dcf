@@ -55,10 +55,12 @@ registerHandler(
       subRequest,
       baseUrl,
       overwrite = true,
+      serializer,
     }: {
       subRequest: Request<any>;
       baseUrl: string;
       overwrite?: boolean;
+      serializer: (data: any[]) => Buffer | Promise<Buffer>;
     },
     context: MasterServer,
   ) => {
@@ -75,13 +77,13 @@ registerHandler(
     const saver = fileLoader.createDataSaver(baseUrl);
 
     const saveFunc = serialize(
-      (data: any[], filename: string) => {
-        const lines = data.map(v => v.toString()).join('\n');
-        const buffer = Buffer.from(lines);
-        saver(filename, buffer);
+      async (data: any[], filename: string) => {
+        const buffer = await serializer(data);
+        return saver(filename, buffer);
       },
       {
         saver,
+        serializer,
       },
     );
 

@@ -349,6 +349,10 @@ export class RDD<T> {
         subRequest: await this.generateTask(),
         baseUrl,
         overwrite,
+        serializer: serialize((data: any[]) => {
+          const lines = data.map(v => v.toString()).join('\n');
+          return Buffer.from(lines);
+        }),
       },
     });
   }
