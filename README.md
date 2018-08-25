@@ -25,13 +25,14 @@ await dcc
 - [x] rdd & partition creation & release.
 - [x] map & reduce
 - [x] repartition & reduceByKey
-- [ ] disk storage partitions
-- [ ] cache
+- [x] disk storage partitions
+- [x] cache
 - [ ] distributed master.
 - [ ] use debug module for information/error
 - [ ] add configure system.
 - [ ] file loader/aliyun oss loader
 - [ ] decompresser
+- [ ] sort
 
 ## How to use
 
