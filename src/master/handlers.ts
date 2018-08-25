@@ -9,6 +9,7 @@ export const MAP = '@@master/map';
 export const REDUCE = '@@master/reduce';
 export const REPARTITION = '@@master/repartition';
 export const COALESCE = '@@master/coalesce';
+export const CONCAT = '@@master/concat';
 
 export const CACHE = '@@master/cache';
 export const LOAD_CACHE = '@@master/loadCache';

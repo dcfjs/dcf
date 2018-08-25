@@ -43,6 +43,8 @@ async function main() {
       .take(10),
   );
 
+  console.log(await rdd.concat(rdd).take(20));
+
   await rdd.release();
   // Shutdown
   client.dispose();

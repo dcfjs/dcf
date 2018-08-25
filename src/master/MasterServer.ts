@@ -1,7 +1,11 @@
 import { StorageType } from './../common/types';
 import { WorkerClient } from '../worker/WorkerClient';
 import { Request } from '../client/Client';
-import { SerializeFunction, serialize } from '../common/SerializeFunction';
+import {
+  SerializeFunction,
+  serialize,
+  deserialize,
+} from '../common/SerializeFunction';
 
 import * as workerActions from '../worker/handlers';
 import * as masterActions from './handlers';
@@ -21,9 +25,11 @@ type OutArgs = {
   partitionArgs?: any[];
 };
 
+type Partition = [number, string];
+
 type CacheRecord = {
   storageType: StorageType;
-  partitions: string[][];
+  partitions: Partition[];
 };
 
 export class MasterServer {
@@ -61,6 +67,7 @@ export class MasterServer {
     }
   }
 
+  // final work for even distribution.
   async finalWork(
     ins: InArgs[],
     out: OutArgs | OutArgs[],
@@ -79,7 +86,15 @@ export class MasterServer {
         }),
       );
     }
-    return await Promise.all(works);
+    const resp = await Promise.all(works);
+
+    for (let i = 0; i < this.workers.length; i++) {
+      const workerOut = Array.isArray(out) ? out[i] : out;
+      if (workerOut.type === 'partitions') {
+        resp[i] = resp[i].map((v: string) => [i, v] as Partition);
+      }
+    }
+    return this.mergeWorkerResult(resp);
   }
 
   createRDD(
@@ -102,7 +117,7 @@ export class MasterServer {
     );
   }
 
-  async addCache(storageType: StorageType, partitions: string[][]) {
+  async addCache(storageType: StorageType, partitions: Partition[]) {
     const id = ++this.cacheIdCounter;
     this.caches[id] = {
       storageType,
@@ -111,27 +126,65 @@ export class MasterServer {
     return id;
   }
 
-  loadCache(
+  async loadCache(
     id: number,
     out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[],
   ): Promise<any> {
     const { storageType, partitions } = this.caches[id];
-    return this.finalWork(
-      partitions.map(
-        v =>
-          ({
-            type: 'partitions',
-            storageType,
-            partitions: v,
-          } as InArgs),
-      ),
-      out,
-      mappers,
-    );
+
+    // group partitions by workers.
+    let inArgs = this.workers.map(v => ({
+      in: {
+        type: 'partitions',
+        storageType,
+        partitions: [] as string[],
+      },
+      indecies: [] as number[],
+    }));
+
+    for (let [i, [wid, pid]] of partitions.entries()) {
+      inArgs[wid].in.partitions.push(pid);
+      inArgs[wid].indecies.push(i);
+    }
+
+    const works: Promise<any>[] = [];
+    for (const [i, worker] of this.workers.entries()) {
+      works.push(
+        worker.processRequest({
+          type: workerActions.CALC,
+          payload: {
+            in: inArgs[i].in,
+            mappers,
+            out: Array.isArray(out) ? out[i] : out,
+          },
+        }),
+      );
+    }
+    const resps = await Promise.all(works);
+
+    const ret = partitions.map(v => null);
+
+    // flat map result by indecies
+    for (let [i, resp] of resps.entries()) {
+      const workerOut = Array.isArray(out) ? out[i] : out;
+      if (workerOut.type === 'partitions') {
+        resp = resp.map((v: string) => [i, v] as Partition);
+      }
+      for (const [j, v] of resp.entries()) {
+        ret[inArgs[i].indecies[j]] = v;
+      }
+    }
+
+    return ret;
   }
   async releaseCache(id: number) {
     const { storageType, partitions } = this.caches[id];
+    let inArgs = this.workers.map(v => [] as string[]);
+
+    for (let [wid, pid] of partitions) {
+      inArgs[wid].push(pid);
+    }
     const works = [];
     for (const [i, worker] of this.workers.entries()) {
       works.push(
@@ -139,7 +192,7 @@ export class MasterServer {
           type: workerActions.RELEASE,
           payload: {
             storageType,
-            partitions: partitions[i],
+            partitions: inArgs[i],
           },
         }),
       );
@@ -193,7 +246,7 @@ export class MasterServer {
     dependWork: Request<any>,
     out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[] = [],
-  ): Promise<any> {
+  ): Promise<any[]> {
     const { type, payload } = dependWork;
 
     switch (type) {
@@ -210,6 +263,16 @@ export class MasterServer {
       case masterActions.LOAD_CACHE: {
         const id: number = payload;
         return this.loadCache(id, out, mappers);
+      }
+
+      case masterActions.CONCAT: {
+        const subRequests = payload as any[];
+        const resps: any[][] = await Promise.all(
+          subRequests.map((v: Request<any>) =>
+            this.runWork(v, out, [...mappers]),
+          ),
+        );
+        return ([] as any).concat(...resps);
       }
 
       case masterActions.MAP: {

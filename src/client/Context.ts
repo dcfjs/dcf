@@ -9,6 +9,7 @@ import {
   LOAD_CACHE,
   RELEASE_CACHE,
   CACHE,
+  CONCAT,
 } from './../master/handlers';
 import { Client, Request } from './Client';
 import { serialize } from '../common/SerializeFunction';
@@ -312,6 +313,9 @@ export class RDD<T> {
   cache(storageType: StorageType = 'memory'): CacheRDD<T> {
     return new CacheRDD(storageType, this);
   }
+  concat(...others: RDD<T>[]): RDD<T> {
+    return this.context.concat(this, ...others);
+  }
 }
 
 export class GeneratedRDD<T> extends RDD<T> {
@@ -402,6 +406,13 @@ export class Context {
         args,
         type: 'memory',
       },
+    }));
+  }
+
+  concat<T>(...rdds: RDD<T>[]): RDD<T> {
+    return new GeneratedRDD<T>(this, async () => ({
+      type: CONCAT,
+      payload: await Promise.all(rdds.map(v => v.generateTask())),
     }));
   }
 }

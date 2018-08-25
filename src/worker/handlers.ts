@@ -213,9 +213,6 @@ registerHandler(
         break;
       }
     }
-    if (outType === 'reduce') {
-      return deserialize(finalReducer)(results);
-    }
     return results;
   },
 );
