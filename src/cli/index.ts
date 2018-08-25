@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { LocalClient } from '../client/LocalClient';
 import { createContext, runInContext, Context as ScriptContext } from 'vm';
 import * as readline from 'readline';

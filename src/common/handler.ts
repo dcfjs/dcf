@@ -1,4 +1,4 @@
-import { Response, Request } from '../client';
+import { Request } from '../client';
 
 export type RequestHandler = (payload: any, context: any) => any | Promise<any>;
 
