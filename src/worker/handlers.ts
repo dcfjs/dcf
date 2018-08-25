@@ -159,7 +159,7 @@ registerHandler(
     async function work(partition: any) {
       let ret = partition;
       for (const func of funcs) {
-        ret = func(ret);
+        ret = await func(ret);
       }
 
       switch (outType) {

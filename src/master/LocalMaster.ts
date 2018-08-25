@@ -5,6 +5,7 @@ import './handlers';
 import { processRequest } from '../common/handler';
 import { MasterServer } from './MasterServer';
 import { promises as fs } from 'fs';
+import * as fileLoader from './loaders/fileLoader';
 
 export class LocalMaster extends MasterServer {
   constructor(workerCount: number = os.cpus().length) {
@@ -12,6 +13,7 @@ export class LocalMaster extends MasterServer {
     this.workers = new Array(workerCount)
       .fill(0)
       .map((v, i) => new LocalWorker(`worker-${i}`));
+    this.registerFileLoader(fileLoader);
   }
   async init(): Promise<void> {
     try {

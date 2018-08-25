@@ -27,10 +27,11 @@ await dcc
 - [x] repartition & reduceByKey
 - [x] disk storage partitions
 - [x] cache
+- [ ] file loader/aliyun oss loader
+- [ ] export module to npm
 - [ ] distributed master.
 - [ ] use debug module for information/error
 - [ ] add configure system.
-- [ ] file loader/aliyun oss loader
 - [ ] decompresser
 - [ ] sort
 

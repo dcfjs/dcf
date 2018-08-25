@@ -1,8 +1,13 @@
 import { LocalMaster } from '../master/LocalMaster';
 import { Client, Request, Response } from './Client';
+import * as os from 'os';
 
 export class LocalClient implements Client {
-  master = new LocalMaster();
+  master: LocalMaster;
+
+  constructor(workerCount: number = os.cpus().length) {
+    this.master = new LocalMaster(workerCount);
+  }
 
   init(): Promise<void> {
     return this.master.init();

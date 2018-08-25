@@ -1,11 +1,7 @@
 import { StorageType } from './../common/types';
 import { WorkerClient } from '../worker/WorkerClient';
 import { Request } from '../client/Client';
-import {
-  SerializeFunction,
-  serialize,
-  deserialize,
-} from '../common/SerializeFunction';
+import { SerializeFunction, serialize } from '../common/SerializeFunction';
 
 import * as workerActions from '../worker/handlers';
 import * as masterActions from './handlers';
@@ -32,10 +28,35 @@ type CacheRecord = {
   partitions: Partition[];
 };
 
+export interface FileLoader {
+  canHandleUrl(
+    baseUrl: string,
+    type: 'load' | 'save',
+  ): boolean | Promise<boolean>;
+  listFiles(baseUrl: string, recursive?: boolean): string[] | Promise<string[]>;
+  createDataLoader(
+    baseUrl: string,
+  ): SerializeFunction<(filename: string) => Buffer | Promise<Buffer>>;
+
+  initSaveProgress(baseUrl: string, overwrite?: boolean): void | Promise<void>;
+  createDataSaver(
+    baseUrl: string,
+  ): SerializeFunction<
+    (filename: string, buffer: Buffer) => void | Promise<void>
+  >;
+  markSaveSuccess(baseUrl: string): void | Promise<void>;
+}
+
 export class MasterServer {
   workers: WorkerClient[] = [];
   caches: CacheRecord[] = [];
   cacheIdCounter: number = 0;
+
+  fileLoaderRegistry: FileLoader[] = [];
+
+  registerFileLoader(loader: FileLoader) {
+    this.fileLoaderRegistry.push(loader);
+  }
 
   async init(): Promise<void> {}
   async dispose(): Promise<void> {}
@@ -72,7 +93,7 @@ export class MasterServer {
     ins: InArgs[],
     out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[],
-  ): Promise<any> {
+  ): Promise<any[]> {
     const works: Promise<any>[] = [];
     for (const [i, worker] of this.workers.entries()) {
       works.push(
@@ -228,18 +249,66 @@ export class MasterServer {
     );
   }
 
-  getPartitionCount(dependWork: Request<any>): number {
+  async getPartitionCount(dependWork: Request<any>): Promise<number> {
     const { type, payload } = dependWork;
     switch (type) {
       case masterActions.CREATE_RDD:
       case masterActions.REPARTITION:
       case masterActions.COALESCE:
         return payload.numPartitions;
+      case masterActions.LOAD_CACHE:
+        const id: number = payload;
+        return this.caches[id].partitions.length;
+      case masterActions.CONCAT: {
+        const subRequests = payload as Request<any>[];
+        return (await Promise.all(
+          subRequests.map(v => this.getPartitionCount(v)),
+        )).reduce((a, b) => a + b);
+      }
+      case masterActions.LOAD_FILE: {
+        const { baseUrl, recursive } = payload;
+        const loader = await this.getFileLoader(baseUrl, 'load');
+        if (!loader) {
+          throw new Error(`No valid loader for url ${baseUrl}`);
+        }
+        const files = await loader.listFiles(baseUrl, recursive);
+        return files.length;
+      }
       case masterActions.MAP:
         return this.getPartitionCount(payload.subRequest);
       default:
         throw new Error(`Unknown request type ${type}`);
     }
+  }
+
+  async getFileLoader(
+    baseUrl: string,
+    type: 'load' | 'save',
+  ): Promise<FileLoader | null> {
+    for (const loader of this.fileLoaderRegistry) {
+      if (await loader.canHandleUrl(baseUrl, type)) {
+        return loader;
+      }
+    }
+    return null;
+  }
+
+  async loadFile(
+    baseUrl: string,
+    recursive: boolean,
+    out: OutArgs | OutArgs[],
+    mappers: SerializeFunction<(arg: any) => any>[],
+  ): Promise<any[]> {
+    const loader = await this.getFileLoader(baseUrl, 'load');
+    if (!loader) {
+      throw new Error(`No valid loader for url ${baseUrl}`);
+    }
+    const files = await loader.listFiles(baseUrl, recursive);
+    const func = loader.createDataLoader(baseUrl);
+    mappers.unshift(
+      serialize(filename => Promise.all([func(filename)]), { func }),
+    );
+    return this.createRDD(files, out, mappers);
   }
 
   async runWork(
@@ -263,6 +332,11 @@ export class MasterServer {
       case masterActions.LOAD_CACHE: {
         const id: number = payload;
         return this.loadCache(id, out, mappers);
+      }
+
+      case masterActions.LOAD_FILE: {
+        const { baseUrl, recursive } = payload;
+        return this.loadFile(baseUrl, recursive, out, mappers);
       }
 
       case masterActions.CONCAT: {
@@ -296,7 +370,7 @@ export class MasterServer {
 
       case masterActions.COALESCE: {
         const { subRequest, numPartitions } = payload;
-        const originPartitions = this.getPartitionCount(subRequest);
+        const originPartitions = await this.getPartitionCount(subRequest);
 
         // Arg format(for example 4 pieces):
         // startIndex, [rate0, rate1, rate2]

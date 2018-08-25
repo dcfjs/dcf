@@ -10,6 +10,8 @@ import {
   RELEASE_CACHE,
   CACHE,
   CONCAT,
+  LOAD_FILE,
+  GET_NUM_PARTITIONS,
 } from './../master/handlers';
 import { Client, Request } from './Client';
 import { serialize } from '../common/SerializeFunction';
@@ -152,6 +154,17 @@ export class RDD<T> {
     return this.mapPartitions((partition: T[]) => partition.map(func), {
       func,
     });
+  }
+  flatMap<T1>(func: ((v: T) => T1[]), env?: FunctionEnv): RDD<T1> {
+    if (typeof func === 'function') {
+      func = serialize(func, env);
+    }
+    return this.mapPartitions(
+      (partition: T[]) => ([] as T1[]).concat(...partition.map(func)),
+      {
+        func,
+      },
+    );
   }
   filter(func: (v: T) => boolean, env?: FunctionEnv): RDD<T> {
     if (typeof func === 'function') {
@@ -316,6 +329,13 @@ export class RDD<T> {
   concat(...others: RDD<T>[]): RDD<T> {
     return this.context.concat(this, ...others);
   }
+
+  async getNumPartitions(): Promise<number> {
+    return this.context.client.request({
+      type: GET_NUM_PARTITIONS,
+      payload: await this.generateTask(),
+    });
+  }
 }
 
 export class GeneratedRDD<T> extends RDD<T> {
@@ -463,5 +483,25 @@ export class Context {
       type: CONCAT,
       payload: await Promise.all(rdds.map(v => v.generateTask())),
     }));
+  }
+
+  binaryFiles(baseUrl: string, recursive: boolean = false): RDD<Buffer> {
+    return new GeneratedRDD<Buffer>(this, () => ({
+      type: LOAD_FILE,
+      payload: {
+        baseUrl,
+        recursive,
+      },
+    }));
+  }
+
+  wholeTextFiles(baseUrl: string, recursive: boolean = false): RDD<string> {
+    return this.binaryFiles(baseUrl, recursive).map(v => v.toString());
+  }
+
+  textFile(baseUrl: string, recursive: boolean = false): RDD<string> {
+    return this.wholeTextFiles(baseUrl, recursive).flatMap(v => {
+      return v.replace(/\\r/m, '').split('\n');
+    });
   }
 }

@@ -10,6 +10,8 @@ export const REDUCE = '@@master/reduce';
 export const REPARTITION = '@@master/repartition';
 export const COALESCE = '@@master/coalesce';
 export const CONCAT = '@@master/concat';
+export const LOAD_FILE = '@@master/loadFile';
+export const GET_NUM_PARTITIONS = '@@master/getNumPartitions';
 
 export const CACHE = '@@master/cache';
 export const LOAD_CACHE = '@@master/loadCache';
@@ -39,6 +41,13 @@ registerHandler(
     );
 
     return deserialize(finalFunc)(results);
+  },
+);
+
+registerHandler(
+  GET_NUM_PARTITIONS,
+  (subRequest: Request<any>, context: MasterServer) => {
+    return context.getPartitionCount(subRequest);
   },
 );
 
