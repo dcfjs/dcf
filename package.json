@@ -1,12 +1,18 @@
 {
   "name": "dcf",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "0.1.0",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "repository": "git@github.com:tdzl2003/dcf.git",
   "license": "MIT",
+  "bin": {
+    "dcf-shell": "lib/cli/index.js"
+  },
   "scripts": {
     "start": "cross-env NODE_NO_WARNINGS=1 ts-node src/cli/index.ts",
-    "ts-node": "cross-env NODE_NO_WARNINGS=1 ts-node"
+    "ts-node": "cross-env NODE_NO_WARNINGS=1 ts-node",
+    "build": "tsc",
+    "prepare": "npm run build"
   },
   "devDependencies": {
     "ts-node": "^7.0.1",

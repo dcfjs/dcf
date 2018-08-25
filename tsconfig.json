@@ -6,12 +6,13 @@
     "sourceMap": true,
     "strict": true,
     "noImplicitAny": true,
-    "outDir": "./dist",
+    "outDir": "./lib",
     "rootDir": "./src",
+    "declaration": true,
 
     "lib": ["esnext"],
     "types": ["node"]
   },
-  "exclude": ["node_modules"],
+  "exclude": ["node_modules", "lib"],
   "compileOnSave": false
 }
