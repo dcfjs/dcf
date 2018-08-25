@@ -156,6 +156,32 @@ export class RDD<T> {
       func,
     });
   }
+  async reduce(func: ((a: T, b: T) => T), env?: FunctionEnv): Promise<number> {
+    if (typeof func === 'function') {
+      func = serialize(func, env);
+    }
+    return this.context.client.request({
+      type: REDUCE,
+      payload: {
+        subRequest: await this.generateTask(),
+        partitionFunc: serialize(
+          (data: T[]) => (data.length > 0 ? [data.reduce(func)] : []),
+          {
+            func,
+          },
+        ),
+        finalFunc: serialize(
+          (result: T[][]) => {
+            const arr = ([] as T[]).concat(...result);
+            return arr.length > 0 ? arr.reduce(func) : null;
+          },
+          {
+            func,
+          },
+        ),
+      },
+    });
+  }
   flatMap<T1>(func: ((v: T) => T1[]), env?: FunctionEnv): RDD<T1> {
     if (typeof func === 'function') {
       func = serialize(func, env);
