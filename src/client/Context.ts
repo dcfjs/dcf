@@ -49,8 +49,8 @@ export class RDD<T> {
       type: REDUCE,
       payload: {
         subRequest: await this.generateTask(),
-        partitionFunc: serialize((data: T[]) => [data]),
-        finalFunc: serialize((results: T[][][]) => {
+        partitionFunc: serialize((data: T[]) => data),
+        finalFunc: serialize((results: T[][]) => {
           return ([] as any).concat(...results);
         }),
       },
@@ -147,6 +147,9 @@ export class RDD<T> {
       },
     });
     return new GeneratedRDD<T1>(this.context, generateTask);
+  }
+  glom() {
+    return this.mapPartitions((v: T[]) => [v]);
   }
   map<T1>(func: ((v: T) => T1), env?: FunctionEnv): RDD<T1> {
     if (typeof func === 'function') {
