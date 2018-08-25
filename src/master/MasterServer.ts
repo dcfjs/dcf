@@ -14,8 +14,11 @@ type InArgs = {
 };
 
 type OutArgs = {
-  type: 'reduce' | 'partitions' | 'parts';
+  type: 'reduce' | 'partitions' | 'parts' | 'saveFile';
   storageType?: StorageType;
+  saveFunc?: SerializeFunction<
+    (data: any[], filename: string) => void | Promise<void>
+  >;
   partitionFunc?: SerializeFunction<(v: any[], arg: any) => any[][]>;
   args?: any[];
 };
@@ -127,6 +130,16 @@ export class MasterServer {
   ): Promise<any> {
     const partitionArgs = this.splitByWorker(args);
 
+    if (!Array.isArray(out) && Array.isArray(out.args)) {
+      out = this.splitByWorker(out.args).map(
+        args =>
+          ({
+            ...out,
+            args,
+          } as OutArgs),
+      );
+    }
+
     return this.finalWork(
       partitionArgs.map(
         v =>
@@ -169,6 +182,16 @@ export class MasterServer {
     for (let [i, [wid, pid]] of partitions.entries()) {
       inArgs[wid].in.partitions.push(pid);
       inArgs[wid].indecies.push(i);
+    }
+
+    if (!Array.isArray(out) && Array.isArray(out.args)) {
+      const out1: OutArgs[] = this.workers.map(
+        v => ({ ...out, args: [] } as OutArgs),
+      );
+      for (let [i, [wid, pid]] of partitions.entries()) {
+        (out1[wid].args as any[]).push(out.args[i]);
+      }
+      out = out1;
     }
 
     const works: Promise<any>[] = [];
@@ -235,6 +258,16 @@ export class MasterServer {
     parts = new Array(numPartitions)
       .fill(0)
       .map((v, i) => parts.map(v => v[i]).filter(v => v));
+
+    if (!Array.isArray(out) && Array.isArray(out.args)) {
+      out = this.splitByWorker(out.args).map(
+        args =>
+          ({
+            ...out,
+            args,
+          } as OutArgs),
+      );
+    }
 
     const partitionParts = this.splitByWorker(parts);
 
@@ -337,6 +370,23 @@ export class MasterServer {
 
       case masterActions.CONCAT: {
         const subRequests = payload as any[];
+        if (!Array.isArray(out) && Array.isArray(out.args)) {
+          // split out args for subrequests.
+          let index = 0;
+          let newOut: OutArgs[] = [];
+
+          for (const subRequest of subRequests) {
+            const partitions = await this.getPartitionCount(subRequest);
+
+            const subOut: OutArgs = {
+              ...out,
+              args: out.args.slice(index, index + partitions),
+            };
+            index += partitions;
+            newOut.push(subOut);
+          }
+          out = newOut;
+        }
         const resps: any[][] = await Promise.all(
           subRequests.map((v: Request<any>) =>
             this.runWork(v, out, [...mappers]),
@@ -357,7 +407,6 @@ export class MasterServer {
         let pieces: string[][] = await this.runWork(subRequest, {
           type: 'parts',
           partitionFunc,
-          args: [],
         });
 
         // Step 2: join pieces and go on.

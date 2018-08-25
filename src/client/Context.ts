@@ -12,6 +12,7 @@ import {
   CONCAT,
   LOAD_FILE,
   GET_NUM_PARTITIONS,
+  SAVE_FILE,
 } from './../master/handlers';
 import { Client, Request } from './Client';
 import { serialize } from '../common/SerializeFunction';
@@ -334,6 +335,21 @@ export class RDD<T> {
     return this.context.client.request({
       type: GET_NUM_PARTITIONS,
       payload: await this.generateTask(),
+    });
+  }
+
+  async saveAsTextFile(
+    baseUrl: string,
+    options: { overwrite?: boolean } = {},
+  ): Promise<void> {
+    const { overwrite = true } = options;
+    return this.context.client.request({
+      type: SAVE_FILE,
+      payload: {
+        subRequest: await this.generateTask(),
+        baseUrl,
+        overwrite,
+      },
     });
   }
 }

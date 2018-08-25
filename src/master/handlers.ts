@@ -2,7 +2,11 @@ import { StorageType } from './../common/types';
 import { MasterServer } from './MasterServer';
 import { registerHandler } from '../common/handler';
 import { Request } from '../client/Client';
-import { SerializeFunction, deserialize } from '../common/SerializeFunction';
+import {
+  SerializeFunction,
+  deserialize,
+  serialize,
+} from '../common/SerializeFunction';
 
 export const CREATE_RDD = '@@master/createRDD';
 export const MAP = '@@master/map';
@@ -36,7 +40,6 @@ registerHandler(
       subRequest,
       {
         type: 'reduce',
-        finalReducer: finalFunc,
       },
       [partitionFunc],
     );
@@ -59,7 +62,36 @@ registerHandler(
     },
     context: MasterServer,
   ) => {
-    const fileLoader = context.getFileLoader(baseUrl, 'save');
+    const fileLoader = await context.getFileLoader(baseUrl, 'save');
+    await fileLoader.initSaveProgress(baseUrl, overwrite);
+    const extension = 'txt';
+    const numPartitions = await context.getPartitionCount(subRequest);
+    const args = new Array(numPartitions)
+      .fill(0)
+      .map(
+        (v, i) => `part-${('000000' + i.toString(16)).substr(-6)}.${extension}`,
+      );
+
+    const saver = fileLoader.createDataSaver(baseUrl);
+
+    const saveFunc = serialize(
+      (data: any[], filename: string) => {
+        const lines = data.map(v => v.toString()).join('\n');
+        const buffer = Buffer.from(lines);
+        saver(filename, buffer);
+      },
+      {
+        saver,
+      },
+    );
+
+    await context.runWork(subRequest, {
+      type: 'saveFile',
+      saveFunc,
+      args,
+    });
+
+    await fileLoader.markSaveSuccess(baseUrl);
   },
 );
 

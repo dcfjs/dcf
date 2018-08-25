@@ -123,7 +123,7 @@ registerHandler(
   async ({
     in: { type: inType, args, partitions, parts, storageType: inStorageType },
     mappers,
-    out: { type: outType, storageType, partitionFunc, args: outArgs },
+    out: { type: outType, storageType, partitionFunc, args: outArgs, saveFunc },
   }: {
     in: {
       type: 'value' | 'partitions' | 'parts';
@@ -134,9 +134,12 @@ registerHandler(
     };
     mappers: SerializeFunction<(arg: any) => any>[];
     out: {
-      type: 'reduce' | 'partitions' | 'parts';
+      type: 'reduce' | 'partitions' | 'parts' | 'saveFile';
       storageType: StorageType;
       partitionFunc: SerializeFunction<(v: any[], arg: any) => any[][]>;
+      saveFunc: SerializeFunction<
+        (data: any[], filename: string) => void | Promise<void>
+      >;
       args: any[];
     };
   }) => {
@@ -147,6 +150,11 @@ registerHandler(
       v: any[],
       arg: any,
     ) => any[][];
+
+    const doSave = (outType === 'saveFile' && deserialize(saveFunc)) as ((
+      data: any[],
+      filename: string,
+    ) => void | Promise<void>);
 
     let index = 0;
     async function work(partition: any) {
@@ -165,7 +173,7 @@ registerHandler(
           break;
         }
         case 'parts': {
-          const tmp = doPartition(ret, outArgs[index++]);
+          const tmp = doPartition(ret, outArgs && outArgs[index++]);
           await Promise.all(
             tmp.map(async (v, j) => {
               if (!v || v.length === 0) {
@@ -179,6 +187,9 @@ registerHandler(
             }),
           );
           break;
+        }
+        case 'saveFile': {
+          await doSave(ret, outArgs[index++]);
         }
       }
     }
