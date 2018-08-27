@@ -61,7 +61,11 @@ export class MasterServer {
   }
 
   async init(): Promise<void> {}
-  async dispose(): Promise<void> {}
+  async dispose(): Promise<void> {
+    for (const id of Object.keys(this.caches)) {
+      await this.releaseCache(id as any);
+    }
+  }
   processRequest<T>(m: Request<T>): Promise<any> {
     throw new Error('Should be implemented.');
   }

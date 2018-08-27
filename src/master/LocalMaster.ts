@@ -16,12 +16,14 @@ export class LocalMaster extends MasterServer {
     this.registerFileLoader(fileLoader);
   }
   async init(): Promise<void> {
+    super.init();
     try {
       await fs.mkdirs('tmp');
     } catch (e) {}
     await Promise.all(this.workers.map(v => v.init()));
   }
   async dispose(): Promise<void> {
+    super.dispose();
     await Promise.all(this.workers.map(v => v.dispose()));
     try {
       const files = await fs.readdir('tmp');
