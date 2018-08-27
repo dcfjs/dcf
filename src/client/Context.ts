@@ -553,15 +553,21 @@ export class Context {
 
   wholeTextFiles(
     baseUrl: string,
+    encoding: string = 'utf8',
     recursive: boolean = false,
   ): RDD<[string, string]> {
     return this.binaryFiles(baseUrl, recursive).map(
-      v => [v[0], v[1].toString()] as [string, string],
+      v => [v[0], v[1].toString(encoding)] as [string, string],
+      { encoding },
     );
   }
 
-  textFile(baseUrl: string, recursive: boolean = false): RDD<string> {
-    return this.wholeTextFiles(baseUrl, recursive).flatMap(v => {
+  textFile(
+    baseUrl: string,
+    encoding: string = 'utf8',
+    recursive: boolean = false,
+  ): RDD<string> {
+    return this.wholeTextFiles(baseUrl, encoding, recursive).flatMap(v => {
       return v[1].replace(/\\r/m, '').split('\n');
     });
   }
