@@ -553,11 +553,15 @@ export class Context {
 
   wholeTextFiles(
     baseUrl: string,
-    encoding: string = 'utf8',
+    encoding: string | boolean = 'utf8',
     recursive: boolean = false,
   ): RDD<[string, string]> {
+    if (typeof encoding === 'boolean') {
+      recursive = encoding;
+      encoding = 'utf-8';
+    }
     return this.binaryFiles(baseUrl, recursive).map(
-      v => [v[0], v[1].toString(encoding)] as [string, string],
+      v => [v[0], v[1].toString(encoding as string)] as [string, string],
       { encoding },
     );
   }
