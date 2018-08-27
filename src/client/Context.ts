@@ -356,8 +356,8 @@ export class RDD<T> {
   cache(storageType: StorageType = 'memory'): CacheRDD<T> {
     return new CacheRDD(storageType, this);
   }
-  concat(...others: RDD<T>[]): RDD<T> {
-    return this.context.concat(this, ...others);
+  union(...others: RDD<T>[]): RDD<T> {
+    return this.context.union(this, ...others);
   }
 
   async getNumPartitions(): Promise<number> {
@@ -531,7 +531,7 @@ export class Context {
     }));
   }
 
-  concat<T>(...rdds: RDD<T>[]): RDD<T> {
+  union<T>(...rdds: RDD<T>[]): RDD<T> {
     return new GeneratedRDD<T>(this, async () => ({
       type: CONCAT,
       payload: await Promise.all(rdds.map(v => v.generateTask())),
