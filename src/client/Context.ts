@@ -454,10 +454,14 @@ export class Context {
 
   range(
     from: number,
-    to: number,
+    to?: number,
     step: number = 1,
     numPartitions?: number,
   ): RDD<number> {
+    if (to == null) {
+      to = from;
+      from = 0;
+    }
     numPartitions = numPartitions || this.client.workerCount();
     const finalCount = Math.ceil((to - from) / step);
 
