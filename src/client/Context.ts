@@ -538,8 +538,11 @@ export class Context {
     }));
   }
 
-  binaryFiles(baseUrl: string, recursive: boolean = false): RDD<Buffer> {
-    return new GeneratedRDD<Buffer>(this, () => ({
+  binaryFiles(
+    baseUrl: string,
+    recursive: boolean = false,
+  ): RDD<[string, Buffer]> {
+    return new GeneratedRDD<[string, Buffer]>(this, () => ({
       type: LOAD_FILE,
       payload: {
         baseUrl,
@@ -548,13 +551,18 @@ export class Context {
     }));
   }
 
-  wholeTextFiles(baseUrl: string, recursive: boolean = false): RDD<string> {
-    return this.binaryFiles(baseUrl, recursive).map(v => v.toString());
+  wholeTextFiles(
+    baseUrl: string,
+    recursive: boolean = false,
+  ): RDD<[string, string]> {
+    return this.binaryFiles(baseUrl, recursive).map(
+      v => [v[0], v[1].toString()] as [string, string],
+    );
   }
 
   textFile(baseUrl: string, recursive: boolean = false): RDD<string> {
     return this.wholeTextFiles(baseUrl, recursive).flatMap(v => {
-      return v.replace(/\\r/m, '').split('\n');
+      return v[1].replace(/\\r/m, '').split('\n');
     });
   }
 }

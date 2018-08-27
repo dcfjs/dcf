@@ -335,7 +335,13 @@ export class MasterServer {
     const files = await loader.listFiles(baseUrl, recursive);
     const func = loader.createDataLoader(baseUrl);
     mappers.unshift(
-      serialize(filename => Promise.all([func(filename)]), { func }),
+      serialize(
+        filename =>
+          Promise.all([
+            Promise.resolve(func(filename)).then(v => [filename, v]),
+          ]),
+        { func, baseUrl },
+      ),
     );
     return this.createRDD(files, out, mappers);
   }
