@@ -4,7 +4,7 @@ import * as os from 'os';
 import './handlers';
 import { processRequest } from '../common/handler';
 import { MasterServer } from './MasterServer';
-import { promises as fs } from 'fs';
+const fs = require('fs-promise');
 import * as fileLoader from './loaders/fileLoader';
 
 export class LocalMaster extends MasterServer {
@@ -17,7 +17,7 @@ export class LocalMaster extends MasterServer {
   }
   async init(): Promise<void> {
     try {
-      await fs.mkdir('tmp');
+      await fs.mkdirs('tmp');
     } catch (e) {}
     await Promise.all(this.workers.map(v => v.init()));
   }

@@ -2,14 +2,12 @@ import { parse as parseUrl, resolve } from 'url';
 import * as os from 'os';
 // import { promises as fs } from 'fs';
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs-promise');
 import {
   SerializeFunction,
   serialize,
   requireModule,
 } from '../../common/SerializeFunction';
-
-const fsPromise = fs.promises;
 
 export function canHandleUrl(baseUrl: string): boolean {
   const url = parseUrl(baseUrl);
@@ -41,7 +39,7 @@ async function listFilesInPath(
   out: string[],
 ) {
   const finalPath = path.resolve(basePath, thisPath);
-  const stat = await fsPromise.lstat(finalPath);
+  const stat = await fs.lstat(finalPath);
   if (!stat.isDirectory()) {
     out.push(thisPath);
     return;
@@ -50,7 +48,7 @@ async function listFilesInPath(
     // ignore subdirectory for non-recursive mode.
     return;
   }
-  const names = await fsPromise.readdir(finalPath);
+  const names = await fs.readdir(finalPath);
   for (const name of names) {
     if (name === '.writing') {
       throw new Error(
@@ -86,25 +84,25 @@ export function createDataLoader(
   const basePath = solvePath(baseUrl);
 
   function loader(filename: string) {
-    return fs.promises.readFile(path.resolve(basePath, filename));
+    return fs.readFile(path.resolve(basePath, filename));
   }
 
   return serialize(loader, {
     basePath,
-    fs: requireModule('fs'),
+    fs: requireModule('fs-promise'),
     path: requireModule('path'),
   });
 }
 
 async function rmdirs(basePath: string) {
-  const stat = await fsPromise.lstat(basePath);
+  const stat = await fs.lstat(basePath);
   if (stat.isDirectory()) {
-    const contents = await fsPromise.readdir(basePath);
+    const contents = await fs.readdir(basePath);
     for (const file of contents) {
       await rmdirs(path.resolve(basePath, file));
     }
   } else {
-    await fsPromise.unlink(basePath);
+    await fs.unlink(basePath);
   }
 }
 
@@ -115,7 +113,7 @@ export async function initSaveProgress(
   const basePath = solvePath(baseUrl);
 
   try {
-    const stat = await fsPromise.lstat(basePath);
+    const stat = await fs.lstat(basePath);
     if (!overwrite) {
       throw new Error(
         `${basePath} is already exists, consider use overwrite=true?`,
@@ -124,17 +122,14 @@ export async function initSaveProgress(
     await rmdirs(basePath);
   } catch (e) {
     if (e.code === 'ENOENT') {
-      await fsPromise.mkdir(basePath);
+      await fs.mkdir(basePath);
     } else {
       throw e;
     }
   }
 
   // create .writing file
-  await fsPromise.writeFile(
-    path.resolve(basePath, '.writing'),
-    Buffer.alloc(0),
-  );
+  await fs.writeFile(path.resolve(basePath, '.writing'), Buffer.alloc(0));
 }
 
 export function createDataSaver(
@@ -144,11 +139,11 @@ export function createDataSaver(
 > {
   const basePath = solvePath(baseUrl);
   function saver(filename: string, buffer: Buffer): Promise<void> {
-    return fs.promises.writeFile(path.resolve(basePath, filename), buffer);
+    return fs.writeFile(path.resolve(basePath, filename), buffer);
   }
   return serialize(saver, {
     basePath,
-    fs: requireModule('fs'),
+    fs: requireModule('fs-promise'),
     path: requireModule('path'),
   });
 }
@@ -156,7 +151,7 @@ export function createDataSaver(
 export async function markSaveSuccess(baseUrl: string): Promise<void> {
   // rename .writing to .success
   const basePath = solvePath(baseUrl);
-  await fsPromise.rename(
+  await fs.rename(
     path.resolve(basePath, '.writing'),
     path.resolve(basePath, '.success'),
   );

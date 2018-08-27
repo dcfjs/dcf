@@ -568,7 +568,7 @@ export class Context {
 
   textFile(
     baseUrl: string,
-    encoding: string = 'utf8',
+    encoding: string | boolean = 'utf8',
     recursive: boolean = false,
   ): RDD<string> {
     return this.wholeTextFiles(baseUrl, encoding, recursive).flatMap(v => {

@@ -1,7 +1,7 @@
 import { SerializeFunction, deserialize } from '../common/SerializeFunction';
 import { registerHandler } from '../common/handler';
 import { StorageType } from '../common/types';
-import { promises as fs } from 'fs';
+const fs = require('fs-promise');
 const v8 = require('v8');
 
 export const INIT = '@@worker/init';
