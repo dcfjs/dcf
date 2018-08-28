@@ -1,6 +1,7 @@
 import { LocalClient } from '../client/LocalClient';
 import { Context } from '../client/Context';
-import { serialize } from '../common/SerializeFunction';
+import { serialize, requireModule } from '../common/SerializeFunction';
+const zlib = require('zlib');
 
 function isPrime(v: number) {
   const max = Math.sqrt(v) + 0.5;
@@ -30,7 +31,32 @@ async function main() {
 
   console.log(`cost ${Date.now() - start} ms`);
 
-  await numbers.filter(isPrime).saveAsTextFile('./prime');
+  await numbers.filter(isPrime).saveAsTextFile('./prime', {
+    extension: 'gz',
+    compressor: serialize(
+      (buf: Buffer) => {
+        return zlib.gzipSync(buf);
+      },
+      {
+        zlib: requireModule('zlib'),
+      },
+    ),
+  });
+
+  console.log(
+    await dcc
+      .textFile('./prime/', {
+        decompressor: serialize(
+          (buf: Buffer) => {
+            return zlib.gunzipSync(buf);
+          },
+          {
+            zlib: requireModule('zlib'),
+          },
+        ),
+      })
+      .count(),
+  );
 
   console.log('Normal:');
   start = Date.now();

@@ -55,7 +55,7 @@ async function listFilesInPath(
         "Last write progress is not completed, mabye there's data loss",
       );
     }
-    if (name[0] !== '.') {
+    if (!name.startsWith('.')) {
       await listFilesInPath(
         basePath,
         path.join(thisPath, name),
@@ -116,7 +116,7 @@ export async function initSaveProgress(
     const stat = await fs.lstat(basePath);
     if (!overwrite) {
       throw new Error(
-        `${basePath} is already exists, consider use overwrite=true?`,
+        `${basePath} already exists, consider use overwrite=true?`,
       );
     }
     await rmdirs(basePath);

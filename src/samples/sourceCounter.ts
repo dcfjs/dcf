@@ -10,7 +10,7 @@ async function main() {
   // Create API context:
   const dcc = new Context(client);
 
-  const rdd = dcc.textFile('./src', true).cache();
+  const rdd = dcc.textFile('./src', { recursive: true }).cache();
 
   console.log('Total files:');
   console.log(await rdd.getNumPartitions());

@@ -1,5 +1,9 @@
 import { StorageType } from './../common/types';
-import { FunctionEnv, requireModule } from './../common/SerializeFunction';
+import {
+  FunctionEnv,
+  requireModule,
+  SerializeFunction,
+} from './../common/SerializeFunction';
 import {
   REDUCE,
   CREATE_RDD,
@@ -135,7 +139,10 @@ export class RDD<T> {
       },
     });
   }
-  mapPartitions<T1>(func: (v: T[]) => T1[], env?: FunctionEnv): RDD<T1> {
+  mapPartitions<T1>(
+    func: (v: T[]) => T1[] | Promise<T1[]>,
+    env?: FunctionEnv,
+  ): RDD<T1> {
     if (typeof func === 'function') {
       func = serialize(func, env);
     }
@@ -205,11 +212,11 @@ export class RDD<T> {
       func,
     });
   }
-  repartition(numPartitions: number, seed?: number): RDD<T> {
-    if (seed == null) {
-      seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
-    }
-    return this.partitionBy(numPartitions, hashPartitionFunc<T>(numPartitions));
+  repartition(numPartitions: number): RDD<T> {
+    return this.partitionBy(
+      numPartitions,
+      serialize(() => (Math.random() * numPartitions) | 0, { numPartitions }),
+    );
   }
   partitionBy(
     numPartitions: number,
@@ -369,19 +376,48 @@ export class RDD<T> {
 
   async saveAsTextFile(
     baseUrl: string,
-    options: { overwrite?: boolean } = {},
+    {
+      overwrite = true,
+      encoding = 'utf8',
+      extension = 'txt',
+
+      compressor,
+      functionEnv,
+    }: {
+      overwrite?: boolean;
+      encoding?: string;
+      extension?: string;
+
+      compressor?: (data: Buffer) => Buffer | Promise<Buffer>;
+      functionEnv?: FunctionEnv;
+    } = {},
   ): Promise<void> {
-    const { overwrite = true } = options;
+    if (typeof compressor === 'function') {
+      compressor = serialize(compressor, functionEnv);
+    }
+
     return this.context.client.request({
       type: SAVE_FILE,
       payload: {
         subRequest: await this.generateTask(),
         baseUrl,
         overwrite,
-        serializer: serialize((data: any[]) => {
-          const lines = data.map(v => v.toString()).join('\n');
-          return Buffer.from(lines);
-        }),
+        extension,
+        serializer: serialize(
+          async (data: any[]) => {
+            const lines = data.map(v => v.toString()).join('\n');
+            let buffer = Buffer.from(lines, encoding);
+            if (compressor) {
+              buffer = await compressor(buffer);
+            }
+
+            return buffer;
+          },
+          {
+            encoding,
+            compressor,
+          },
+        ),
       },
     });
   }
@@ -540,7 +576,11 @@ export class Context {
 
   binaryFiles(
     baseUrl: string,
-    recursive: boolean = false,
+    {
+      recursive = false,
+    }: {
+      recursive?: boolean;
+    } = {},
   ): RDD<[string, Buffer]> {
     return new GeneratedRDD<[string, Buffer]>(this, () => ({
       type: LOAD_FILE,
@@ -553,25 +593,49 @@ export class Context {
 
   wholeTextFiles(
     baseUrl: string,
-    encoding: string | boolean = 'utf8',
-    recursive: boolean = false,
+    {
+      decompressor,
+      encoding = 'utf8',
+      recursive = false,
+      functionEnv,
+    }: {
+      encoding?: string;
+      recursive?: boolean;
+
+      decompressor?: (data: Buffer) => Buffer | Promise<Buffer>;
+      functionEnv?: FunctionEnv;
+    } = {},
   ): RDD<[string, string]> {
     if (typeof encoding === 'boolean') {
       recursive = encoding;
       encoding = 'utf-8';
     }
-    return this.binaryFiles(baseUrl, recursive).map(
-      v => [v[0], v[1].toString(encoding as string)] as [string, string],
-      { encoding },
+    if (typeof decompressor === 'function') {
+      decompressor = serialize(decompressor, functionEnv);
+    }
+    return this.binaryFiles(baseUrl, { recursive }).mapPartitions(
+      async v => {
+        let buf = v[0][1];
+        if (decompressor) {
+          buf = await decompressor(buf);
+        }
+        return [[v[0][0], buf.toString(encoding)] as [string, string]];
+      },
+      { encoding, decompressor },
     );
   }
 
   textFile(
     baseUrl: string,
-    encoding: string | boolean = 'utf8',
-    recursive: boolean = false,
+    options?: {
+      encoding?: string;
+      recursive?: boolean;
+
+      decompressor?: (data: Buffer) => Buffer;
+      functionEnv?: FunctionEnv;
+    },
   ): RDD<string> {
-    return this.wholeTextFiles(baseUrl, encoding, recursive).flatMap(v => {
+    return this.wholeTextFiles(baseUrl, options).flatMap(v => {
       return v[1].replace(/\\r/m, '').split('\n');
     });
   }

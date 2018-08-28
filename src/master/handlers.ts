@@ -56,17 +56,18 @@ registerHandler(
       baseUrl,
       overwrite = true,
       serializer,
+      extension = 'txt',
     }: {
       subRequest: Request<any>;
       baseUrl: string;
       overwrite?: boolean;
       serializer: (data: any[]) => Buffer | Promise<Buffer>;
+      extension?: string;
     },
     context: MasterServer,
   ) => {
     const fileLoader = await context.getFileLoader(baseUrl, 'save');
     await fileLoader.initSaveProgress(baseUrl, overwrite);
-    const extension = 'txt';
     const numPartitions = await context.getPartitionCount(subRequest);
     const args = new Array(numPartitions)
       .fill(0)
