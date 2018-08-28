@@ -70,7 +70,11 @@ export function deserialize<T extends (...args: any[]) => any>(
   )(
     ...f.values.map(
       v =>
-        v.__isFunction ? deserialize(v) : v.__isRequire ? require(v.module) : v,
+        v && v.__isFunction
+          ? deserialize(v)
+          : v && v.__isRequire
+            ? require(v.module)
+            : v,
     ),
   );
 }
