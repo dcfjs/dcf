@@ -1,6 +1,7 @@
 import { SerializeFunction, deserialize } from '../common/SerializeFunction';
 import { registerHandler } from '../common/handler';
 import { StorageType } from '../common/types';
+
 const fs = require('fs-promise');
 const v8 = require('v8');
 
@@ -117,6 +118,22 @@ async function getRepartitionPart<T>(id: PartId): Promise<T[]> {
   return ([] as T[]).concat(...ret);
 }
 
+// Iterator an array with a async function, and break promise chain to keep memory safe.
+function safeRepeat<T>(arr: T[], func: (arg: T) => void | Promise<void>) {
+  return new Promise((resolve, reject) => {
+    let index = 0;
+
+    function next() {
+      if (index >= arr.length) {
+        resolve();
+        return;
+      }
+      Promise.resolve(func(arr[index++])).then(next, reject);
+    }
+    next();
+  });
+}
+
 // V[] | PARTITION | PARTS => V | PARTITION | PARTS
 registerHandler(
   CALC,
@@ -159,9 +176,13 @@ registerHandler(
     let index = 0;
     async function work(partition: any) {
       let ret = partition;
-      for (const func of funcs) {
+
+      await safeRepeat(funcs, async func => {
         ret = await func(ret);
-      }
+      });
+      // for (const func of funcs) {
+      //   ret = await func(ret);
+      // }
 
       switch (outType) {
         case 'reduce': {
@@ -195,25 +216,29 @@ registerHandler(
     }
     switch (inType) {
       case 'value': {
-        for (const arg of args) {
-          await work(arg);
-        }
+        // for (const arg of args) {
+        //   await work(arg);
+        // }
+        await safeRepeat(args, arg => work(arg));
         break;
       }
       case 'partitions': {
-        for (const id of partitions) {
+        // for (const id of partitions) {
+        //   await work(await getPartitionData(inStorageType, id));
+        // }
+        await safeRepeat(partitions, async id => {
           await work(await getPartitionData(inStorageType, id));
-        }
+        });
         break;
       }
       case 'parts': {
-        for (const part of parts) {
+        await safeRepeat(parts, async part => {
           const pieces = await Promise.all(
             part.map(v => getRepartitionPart(v)),
           );
           let v: any = ([] as any).concat(...pieces);
           await work(v);
-        }
+        });
         break;
       }
     }
