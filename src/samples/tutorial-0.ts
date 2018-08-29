@@ -45,6 +45,13 @@ async function main() {
 
   console.log(await rdd.union(rdd).collect());
 
+  console.log(
+    await rdd
+      .union(rdd.map(v => v * 2))
+      .distinct()
+      .count(),
+  );
+
   await rdd.unpersist();
   // Shutdown
   client.dispose();

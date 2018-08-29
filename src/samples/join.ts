@@ -14,13 +14,6 @@ async function main() {
   // Create a new rdd.
   const rdd = dcc.parallelize([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).cache();
 
-  console.log(
-    await rdd
-      .union(rdd)
-      .distinct()
-      .collect(),
-  );
-
   await rdd.unpersist();
   // Shutdown
   client.dispose();

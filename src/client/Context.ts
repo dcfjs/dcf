@@ -219,18 +219,23 @@ export class RDD<T> {
     return this.partitionBy(
       numPartitions,
       hashPartitionFunc<T>(numPartitions),
-    ).mapPartitions(datas => {
-      const ret = [];
-      const map: { [key: string]: T } = {};
-      for (const item of datas) {
-        const k = v8.serialize(item).toString('base64');
-        if (!map[k]) {
-          map[k] = item;
-          ret.push(item);
+    ).mapPartitions(
+      datas => {
+        const ret = [];
+        const map: { [key: string]: T } = {};
+        for (const item of datas) {
+          const k = v8.serialize(item).toString('base64');
+          if (!map[k]) {
+            map[k] = item;
+            ret.push(item);
+          }
         }
-      }
-      return ret;
-    });
+        return ret;
+      },
+      {
+        v8: requireModule('v8'),
+      },
+    );
   }
   repartition(numPartitions: number): RDD<T> {
     return this.partitionBy(
