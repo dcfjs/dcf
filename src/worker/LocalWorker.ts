@@ -2,6 +2,7 @@ import * as cp from 'child_process';
 import { Request, Response } from '../client';
 import { INIT, EXIT } from './handlers';
 import { WorkerClient } from './WorkerClient';
+import { LocalMaster } from '../master/LocalMaster';
 
 const entryScript = require.resolve('./localEntry');
 const isType = /\.ts$/.test(entryScript);
@@ -13,13 +14,15 @@ function createWorker() {
   });
 }
 
-export class LocalWorker implements WorkerClient {
+export class LocalWorker extends WorkerClient {
   worker: cp.ChildProcess | null = null;
   sequence: Function[][] = [];
   waitExit?: Function;
-  id: string;
-  constructor(id: string) {
-    this.id = id;
+  master: LocalMaster;
+
+  constructor(master: LocalMaster, id: string) {
+    super(id);
+    this.master = master;
   }
 
   async init(): Promise<void> {
@@ -37,16 +40,24 @@ export class LocalWorker implements WorkerClient {
       },
     });
   }
-  onMessage = (r: Response<any>) => {
-    const msg = this.sequence.shift();
-    if (!msg) {
-      console.warn('Unexpected response from worker.');
-      return;
-    }
-    if (r.ok) {
-      msg[0](r.payload);
-    } else {
-      msg[1](new Error(r.message));
+  onMessage = (r: Response) => {
+    switch (r.type) {
+      case 'resp': {
+        const msg = this.sequence.shift();
+        if (!msg) {
+          console.warn('Unexpected response from worker.');
+          return;
+        }
+        if (r.ok) {
+          msg[0](r.payload);
+        } else {
+          msg[1](new Error(r.message));
+        }
+        break;
+      }
+      case 'debug': {
+        this.debug(r.msg, ...r.args);
+      }
     }
   };
   onExit = (code: number) => {
@@ -79,5 +90,6 @@ export class LocalWorker implements WorkerClient {
         type: EXIT,
       });
     });
+    this.debug('Exited successfully.');
   }
 }

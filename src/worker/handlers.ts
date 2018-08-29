@@ -1,6 +1,7 @@
 import { SerializeFunction, deserialize } from '../common/SerializeFunction';
 import { registerHandler } from '../common/handler';
 import { StorageType } from '../common/types';
+import debug from '../common/debug';
 
 const fs = require('fs-promise');
 const v8 = require('v8');
@@ -29,12 +30,11 @@ registerHandler(
   ({ id, mode: _mode }: { id: string; mode: WorkerMode }) => {
     wid = id;
     mode = _mode;
-    console.log(`Worker ${wid} inited.`);
+    debug(`Worker inited.`);
   },
 );
 
 registerHandler(EXIT, () => {
-  console.log(`Worker ${wid} exited`);
   process.exit(0);
 });
 
@@ -180,9 +180,6 @@ registerHandler(
       await safeRepeat(funcs, async func => {
         ret = await func(ret);
       });
-      // for (const func of funcs) {
-      //   ret = await func(ret);
-      // }
 
       switch (outType) {
         case 'reduce': {
@@ -216,16 +213,10 @@ registerHandler(
     }
     switch (inType) {
       case 'value': {
-        // for (const arg of args) {
-        //   await work(arg);
-        // }
         await safeRepeat(args, arg => work(arg));
         break;
       }
       case 'partitions': {
-        // for (const id of partitions) {
-        //   await work(await getPartitionData(inStorageType, id));
-        // }
         await safeRepeat(partitions, async id => {
           await work(await getPartitionData(inStorageType, id));
         });

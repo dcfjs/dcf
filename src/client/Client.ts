@@ -10,8 +10,17 @@ export interface Request<T> {
   payload?: T;
 }
 
-export interface Response<T> {
+export interface ResponseMessage<T> {
+  type: 'resp';
   ok: boolean;
   message?: string;
   payload?: T;
 }
+
+export interface DebugMessage {
+  type: 'debug';
+  msg: string;
+  args: any[];
+}
+
+export type Response = ResponseMessage<any> | DebugMessage;

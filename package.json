@@ -9,8 +9,8 @@
     "dcf-shell": "lib/cli/index.js"
   },
   "scripts": {
-    "start": "cross-env NODE_NO_WARNINGS=1 ts-node src/cli/index.ts",
-    "ts-node": "cross-env NODE_NO_WARNINGS=1 ts-node",
+    "start": "cross-env NODE_NO_WARNINGS=1 DEBUG=\"dcf:master,dcf:worker:*\" ts-node src/cli/index.ts",
+    "ts-node": "cross-env NODE_NO_WARNINGS=1 DEBUG=\"dcf:master,dcf:worker:*\" ts-node",
     "build": "tsc",
     "prepare": "npm run build"
   },
@@ -22,7 +22,10 @@
   "dependencies": {
     "@types/node": "^10.7.0",
     "cross-env": "^5.2.0",
+    "debug": "^3.1.0",
     "fs-promise": "^2.0.3",
+    "progress": "^2.0.0",
+    "supports-color": "^5.5.0",
     "tslib": "^1.9.3",
     "xxhash": "^0.2.4"
   }

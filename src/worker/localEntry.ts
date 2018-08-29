@@ -1,30 +1,41 @@
 import { Request } from '../client';
 import { processRequest } from '../common/handler';
 import './handlers';
+import { setDebugFunc } from '../common/debug';
 
-if (!process.send) {
+const { send: _send } = process;
+
+if (!_send) {
   throw new Error('This entry must be loaded by local master!');
 }
+
+const send = _send.bind(process);
+
+setDebugFunc((msg, ...args) => {
+  send({
+    type: 'debug',
+    msg,
+    args,
+  });
+});
 
 const queue: Request<any>[] = [];
 
 async function processNextRequest() {
   try {
     const m = await processRequest(queue[0]);
-    if (process.send) {
-      process.send({
-        ok: true,
-        payload: m,
-      });
-    }
+    send({
+      type: 'resp',
+      ok: true,
+      payload: m,
+    });
   } catch (e) {
     console.log(e);
-    if (process.send) {
-      process.send({
-        ok: false,
-        message: e.message,
-      });
-    }
+    send({
+      type: 'resp',
+      ok: false,
+      message: e.message,
+    });
   }
   queue.shift();
   if (queue.length > 0) {

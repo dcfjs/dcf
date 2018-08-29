@@ -5,6 +5,7 @@ import { SerializeFunction, serialize } from '../common/SerializeFunction';
 
 import * as workerActions from '../worker/handlers';
 import * as masterActions from './handlers';
+import { setDebugFunc } from '../common/debug';
 
 type InArgs = {
   type: 'value' | 'partitions' | 'parts';
@@ -55,6 +56,10 @@ export class MasterServer {
   cacheIdCounter: number = 0;
 
   fileLoaderRegistry: FileLoader[] = [];
+
+  constructor() {
+    setDebugFunc(require('debug')('dcf:master'));
+  }
 
   registerFileLoader(loader: FileLoader) {
     this.fileLoaderRegistry.push(loader);
