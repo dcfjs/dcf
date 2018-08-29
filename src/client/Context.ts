@@ -212,6 +212,23 @@ export class RDD<T> {
       func,
     });
   }
+  distinct(numPartitions: number = this.context.client.workerCount()): RDD<T> {
+    return this.partitionBy(
+      numPartitions,
+      hashPartitionFunc<T>(numPartitions),
+    ).mapPartitions(datas => {
+      const ret = [];
+      const map: { [key: string]: T } = {};
+      for (const item of datas) {
+        const k = v8.serialize(item).toString('base64');
+        if (!map[k]) {
+          map[k] = item;
+          ret.push(item);
+        }
+      }
+      return ret;
+    });
+  }
   repartition(numPartitions: number): RDD<T> {
     return this.partitionBy(
       numPartitions,
