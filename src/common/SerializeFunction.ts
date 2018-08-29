@@ -1,4 +1,6 @@
 import { SerializeFunction } from './SerializeFunction';
+import debug from '../common/debug';
+
 interface SubFunction {
   name: string;
   source: string;
@@ -61,6 +63,7 @@ export function deserialize<T extends (...args: any[]) => any>(
   f: SerializeFunction<T>,
 ): T {
   return new Function(
+    'debug',
     ...f.args,
     f.functions
       .map(v => `var ${v.name} = (function(){return ${v.source};})();\n`)
@@ -68,6 +71,7 @@ export function deserialize<T extends (...args: any[]) => any>(
       'return ' +
       f.source,
   )(
+    debug,
     ...f.values.map(
       v =>
         v && v.__isFunction

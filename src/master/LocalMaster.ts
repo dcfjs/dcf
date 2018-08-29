@@ -1,20 +1,25 @@
+import { LocalClient } from './../client/LocalClient';
 import { Request, Response } from '../client/Client';
 import { LocalWorker } from '../worker/LocalWorker';
 import * as os from 'os';
 import './handlers';
-import { processRequest } from '../common/handler';
 import { MasterServer } from './MasterServer';
 const fs = require('fs-promise');
 import * as fileLoader from './loaders/fileLoader';
 import debug from '../common/debug';
 
 export class LocalMaster extends MasterServer {
-  constructor(workerCount: number = os.cpus().length) {
+  client: LocalClient;
+  constructor(workerCount: number = os.cpus().length, client: LocalClient) {
     super();
+    this.client = client;
     this.workers = new Array(workerCount)
       .fill(0)
       .map((v, i) => new LocalWorker(this, `${i}`));
     this.registerFileLoader(fileLoader);
+  }
+  send(m: Response) {
+    this.client.processMessage(m);
   }
   async init(): Promise<void> {
     super.init();
@@ -36,8 +41,5 @@ export class LocalMaster extends MasterServer {
       await fs.rmdir('tmp');
     } catch (e) {}
     debug('Bye.');
-  }
-  async processRequest<T>(m: Request<T>): Promise<any> {
-    return processRequest(m, this);
   }
 }

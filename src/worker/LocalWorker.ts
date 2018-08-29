@@ -56,7 +56,15 @@ export class LocalWorker extends WorkerClient {
         break;
       }
       case 'debug': {
+        // Pause progress bar and print debug message.
+        this.master.client.pauseProgress();
         this.debug(r.msg, ...r.args);
+        this.master.client.resumeProgress();
+        break;
+      }
+      case 'progress': {
+        this.master.send(r);
+        break;
       }
     }
   };

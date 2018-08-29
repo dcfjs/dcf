@@ -2,6 +2,7 @@ import { SerializeFunction, deserialize } from '../common/SerializeFunction';
 import { registerHandler } from '../common/handler';
 import { StorageType } from '../common/types';
 import debug from '../common/debug';
+import WorkerContext from './WorkerContext';
 
 const fs = require('fs-promise');
 const v8 = require('v8');
@@ -137,29 +138,38 @@ function safeRepeat<T>(arr: T[], func: (arg: T) => void | Promise<void>) {
 // V[] | PARTITION | PARTS => V | PARTITION | PARTS
 registerHandler(
   CALC,
-  async ({
-    in: { type: inType, args, partitions, parts, storageType: inStorageType },
-    mappers,
-    out: { type: outType, storageType, partitionFunc, args: outArgs, saveFunc },
-  }: {
-    in: {
-      type: 'value' | 'partitions' | 'parts';
-      args: any[];
-      storageType: StorageType;
-      partitions: string[];
-      parts: string[][];
-    };
-    mappers: SerializeFunction<(arg: any) => any>[];
-    out: {
-      type: 'reduce' | 'partitions' | 'parts' | 'saveFile';
-      storageType: StorageType;
-      partitionFunc: SerializeFunction<(v: any[], arg: any) => any[][]>;
-      saveFunc: SerializeFunction<
-        (data: any[], filename: string) => void | Promise<void>
-      >;
-      args: any[];
-    };
-  }) => {
+  async (
+    {
+      in: { type: inType, args, partitions, parts, storageType: inStorageType },
+      mappers,
+      out: {
+        type: outType,
+        storageType,
+        partitionFunc,
+        args: outArgs,
+        saveFunc,
+      },
+    }: {
+      in: {
+        type: 'value' | 'partitions' | 'parts';
+        args: any[];
+        storageType: StorageType;
+        partitions: string[];
+        parts: string[][];
+      };
+      mappers: SerializeFunction<(arg: any) => any>[];
+      out: {
+        type: 'reduce' | 'partitions' | 'parts' | 'saveFile';
+        storageType: StorageType;
+        partitionFunc: SerializeFunction<(v: any[], arg: any) => any[][]>;
+        saveFunc: SerializeFunction<
+          (data: any[], filename: string) => void | Promise<void>
+        >;
+        args: any[];
+      };
+    },
+    context: WorkerContext,
+  ) => {
     const results: any[] = [];
     const funcs = mappers.map(v => deserialize(v));
 
@@ -210,6 +220,8 @@ registerHandler(
           await doSave(ret, outArgs[index++]);
         }
       }
+
+      context.tick();
     }
     switch (inType) {
       case 'value': {

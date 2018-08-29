@@ -1,3 +1,4 @@
+import { Response } from './../../lib/client/Client.d';
 import { StorageType } from './../common/types';
 import { WorkerClient } from '../worker/WorkerClient';
 import { Request } from '../client/Client';
@@ -6,6 +7,7 @@ import { SerializeFunction, serialize } from '../common/SerializeFunction';
 import * as workerActions from '../worker/handlers';
 import * as masterActions from './handlers';
 import { setDebugFunc } from '../common/debug';
+import { processRequest } from '../common/handler';
 
 type InArgs = {
   type: 'value' | 'partitions' | 'parts';
@@ -50,6 +52,11 @@ export interface FileLoader {
   markSaveSuccess(baseUrl: string): void | Promise<void>;
 }
 
+interface TaskDetail {
+  index: number;
+  total: number;
+}
+
 export class MasterServer {
   workers: WorkerClient[] = [];
   caches: CacheRecord[] = [];
@@ -71,8 +78,22 @@ export class MasterServer {
       await this.releaseCache(id as any);
     }
   }
-  processRequest<T>(m: Request<T>): Promise<any> {
-    throw new Error('Should be implemented.');
+
+  send(m: Response) {
+    throw new Error('Must be implemented.');
+  }
+
+  onTaskBegin(task: TaskDetail, progressTotal: number) {
+    this.send({
+      type: 'task',
+      partitions: progressTotal,
+      taskIndex: ++task.index,
+      tasks: task.total,
+    });
+  }
+
+  async processRequest<T>(m: Request<T>): Promise<any> {
+    return processRequest(m, this);
   }
 
   splitByWorker<T>(args: T[]): T[][] {
@@ -104,7 +125,10 @@ export class MasterServer {
     ins: InArgs[],
     out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[],
+    task: TaskDetail,
+    progressTotal: number,
   ): Promise<any[]> {
+    this.onTaskBegin(task, progressTotal);
     const works: Promise<any>[] = [];
     for (const [i, worker] of this.workers.entries()) {
       works.push(
@@ -136,6 +160,7 @@ export class MasterServer {
     args: any[],
     out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[],
+    task: TaskDetail,
   ): Promise<any> {
     const partitionArgs = this.splitByWorker(args);
 
@@ -159,6 +184,8 @@ export class MasterServer {
       ),
       out,
       mappers,
+      task,
+      args.length,
     );
   }
 
@@ -175,8 +202,11 @@ export class MasterServer {
     id: number,
     out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[],
+    task: TaskDetail,
   ): Promise<any> {
     const { storageType, partitions } = this.caches[id];
+
+    this.onTaskBegin(task, partitions.length);
 
     // group partitions by workers.
     let inArgs = this.workers.map(v => ({
@@ -266,6 +296,7 @@ export class MasterServer {
     parts: string[][],
     out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[],
+    task: TaskDetail,
   ): Promise<any> {
     // projection parts from [workers][newPartition] to [newPartition][workers]
     // and skip null parts.
@@ -295,6 +326,8 @@ export class MasterServer {
       ),
       out,
       mappers,
+      task,
+      numPartitions,
     );
   }
 
@@ -344,6 +377,7 @@ export class MasterServer {
     recursive: boolean,
     out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[],
+    task: TaskDetail,
   ): Promise<any[]> {
     const loader = await this.getFileLoader(baseUrl, 'load');
     const files = await loader.listFiles(baseUrl, recursive);
@@ -357,13 +391,48 @@ export class MasterServer {
         { func, baseUrl },
       ),
     );
-    return this.createRDD(files, out, mappers);
+    return this.createRDD(files, out, mappers, task);
+  }
+
+  getTaskDetail(
+    dependWork: Request<any>,
+    out: TaskDetail = { total: 0, index: 0 },
+  ) {
+    const { type, payload } = dependWork;
+    switch (type) {
+      case masterActions.CREATE_RDD:
+      case masterActions.LOAD_CACHE:
+      case masterActions.LOAD_FILE: {
+        out.total += 1;
+        break;
+      }
+      case masterActions.CONCAT: {
+        const subRequests = payload as any[];
+        for (const request of subRequests) {
+          this.getTaskDetail(request, out);
+        }
+        break;
+      }
+      case masterActions.MAP: {
+        const { subRequest } = payload;
+        this.getTaskDetail(subRequest, out);
+        break;
+      }
+      case masterActions.REPARTITION:
+      case masterActions.COALESCE: {
+        const { subRequest } = payload;
+        out.total += 1;
+        this.getTaskDetail(subRequest);
+      }
+    }
+    return out;
   }
 
   async runWork(
     dependWork: Request<any>,
     out: OutArgs | OutArgs[],
     mappers: SerializeFunction<(arg: any) => any>[] = [],
+    task: TaskDetail = this.getTaskDetail(dependWork),
   ): Promise<any[]> {
     const { type, payload } = dependWork;
 
@@ -375,17 +444,18 @@ export class MasterServer {
           new Array(numPartitions).fill(0).map((v, i) => args[i]),
           out,
           mappers,
+          task,
         );
       }
 
       case masterActions.LOAD_CACHE: {
         const id: number = payload;
-        return this.loadCache(id, out, mappers);
+        return this.loadCache(id, out, mappers, task);
       }
 
       case masterActions.LOAD_FILE: {
         const { baseUrl, recursive } = payload;
-        return this.loadFile(baseUrl, recursive, out, mappers);
+        return this.loadFile(baseUrl, recursive, out, mappers, task);
       }
 
       case masterActions.CONCAT: {
@@ -409,7 +479,7 @@ export class MasterServer {
         }
         const resps: any[][] = await Promise.all(
           subRequests.map((v: Request<any>) =>
-            this.runWork(v, out, [...mappers]),
+            this.runWork(v, out, [...mappers], task),
           ),
         );
         return ([] as any).concat(...resps);
@@ -418,19 +488,25 @@ export class MasterServer {
       case masterActions.MAP: {
         const { subRequest, func } = payload;
         mappers.unshift(func);
-        return this.runWork(subRequest, out, mappers);
+        return this.runWork(subRequest, out, mappers, task);
       }
 
       case masterActions.REPARTITION: {
         const { subRequest, numPartitions, partitionFunc } = payload;
+
         // step 1: splice pieces;
-        let pieces: string[][] = await this.runWork(subRequest, {
-          type: 'parts',
-          partitionFunc,
-        });
+        let pieces: string[][] = await this.runWork(
+          subRequest,
+          {
+            type: 'parts',
+            partitionFunc,
+          },
+          [],
+          task,
+        );
 
         // Step 2: join pieces and go on.
-        return this.joinPieces(numPartitions, pieces, out, mappers);
+        return this.joinPieces(numPartitions, pieces, out, mappers, task);
       }
 
       case masterActions.COALESCE: {
@@ -487,10 +563,12 @@ export class MasterServer {
                 args: v,
               } as OutArgs),
           ),
+          [],
+          task,
         );
 
         // Step 2: join pieces and go on.
-        return this.joinPieces(numPartitions, pieces, out, mappers);
+        return this.joinPieces(numPartitions, pieces, out, mappers, task);
       }
 
       default:

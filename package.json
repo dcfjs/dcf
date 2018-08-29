@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@types/node": "^10.7.0",
+    "@types/progress": "^2.0.1",
     "cross-env": "^5.2.0",
     "debug": "^3.1.0",
     "fs-promise": "^2.0.3",

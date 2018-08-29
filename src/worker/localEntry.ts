@@ -1,7 +1,8 @@
-import { Request } from '../client';
+import { Request, Response } from '../client';
 import { processRequest } from '../common/handler';
 import './handlers';
 import { setDebugFunc } from '../common/debug';
+import WorkerContext from './WorkerContext';
 
 const { send: _send } = process;
 
@@ -19,11 +20,19 @@ setDebugFunc((msg, ...args) => {
   });
 });
 
+class LocalWorkerContext extends WorkerContext {
+  send(msg: Response) {
+    send(msg);
+  }
+}
+
+const context = new LocalWorkerContext();
+
 const queue: Request<any>[] = [];
 
 async function processNextRequest() {
   try {
-    const m = await processRequest(queue[0]);
+    const m = await processRequest(queue[0], context);
     send({
       type: 'resp',
       ok: true,

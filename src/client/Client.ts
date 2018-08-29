@@ -23,4 +23,20 @@ export interface DebugMessage {
   args: any[];
 }
 
-export type Response = ResponseMessage<any> | DebugMessage;
+export interface ProgressMessage {
+  type: 'progress';
+  tick: number;
+}
+
+export interface TaskMessage {
+  type: 'task';
+  partitions: number;
+  taskIndex: number;
+  tasks: number;
+}
+
+export type Response =
+  | ResponseMessage<any>
+  | DebugMessage
+  | ProgressMessage
+  | TaskMessage;
