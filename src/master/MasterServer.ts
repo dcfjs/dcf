@@ -215,6 +215,11 @@ export class MasterServer {
 
     const ret = partitions.map(v => null);
 
+    const firstOut = Array.isArray(out) ? out[0] : out;
+    if (firstOut.type === 'parts') {
+      return resps;
+    }
+
     // flat map result by indecies
     for (let [i, resp] of resps.entries()) {
       const workerOut = Array.isArray(out) ? out[i] : out;
