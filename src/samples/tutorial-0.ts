@@ -12,7 +12,7 @@ async function main() {
   const dcc = new Context(client);
 
   // Create a new rdd.
-  const rdd = dcc.parallelize([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).cache('disk');
+  const rdd = dcc.parallelize([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).cache();
 
   // Do some task:
   console.log(await rdd.count());
@@ -23,12 +23,12 @@ async function main() {
     await rdd
       .map(v => v + 1)
       .filter(v => v % 2 === 0)
-      .take(10),
+      .collect(),
   );
 
   // Upvalue must be explicit passed and should not be modified:
   const min = 5;
-  console.log(await rdd.filter(v => v >= min, { min }).take(10));
+  console.log(await rdd.filter(v => v >= min, { min }).collect());
 
   // environment is also valid for every upvalue function.
   const test = (v: number) => v >= min;
@@ -40,12 +40,12 @@ async function main() {
         // or you can serialized explicitly.
         test1: serialize(test, { min }),
       })
-      .take(10),
+      .collect(),
   );
 
-  console.log(await rdd.union(rdd).take(20));
+  console.log(await rdd.union(rdd).collect());
 
-  await rdd.release();
+  await rdd.unpersist();
   // Shutdown
   client.dispose();
 }

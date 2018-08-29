@@ -20,6 +20,9 @@ import {
 } from './../master/handlers';
 import { Client, Request } from './Client';
 import { serialize } from '../common/SerializeFunction';
+
+import { cogroup } from './join';
+
 const XXHash = require('xxhash');
 const v8 = require('v8');
 
@@ -440,6 +443,23 @@ export class RDD<T> {
         ),
       },
     });
+  }
+
+  groupWith<K>(
+    this: RDD<[K, any]>,
+    ...others: RDD<[K, any]>[]
+  ): RDD<[K, any[][]]> {
+    return cogroup([this, ...others]);
+  }
+
+  cogroup<K, V, V1>(
+    this: RDD<[K, V]>,
+    other: RDD<[K, V1]>,
+    numPartitions?: number,
+  ): RDD<[K, [V[], V1[]]]> {
+    return (cogroup([this, other], numPartitions) as any) as RDD<
+      [K, [V[], V1[]]]
+    >;
   }
 }
 

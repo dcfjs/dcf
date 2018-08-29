@@ -27,7 +27,7 @@ async function main() {
   console.log('Comment lines(only start with //)');
   console.log(await rdd.filter(v => /^\s+\/\//.test(v)).count());
 
-  await rdd.release();
+  await rdd.unpersist();
   // Shutdown
   client.dispose();
 }
