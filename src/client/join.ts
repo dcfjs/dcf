@@ -27,5 +27,5 @@ export function cogroup<K>(
         ret.push(a[i].concat(b[i]));
       }
       return ret;
-    });
+    }, numPartitions);
 }
