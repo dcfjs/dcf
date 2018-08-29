@@ -360,8 +360,11 @@ export class RDD<T> {
       .partitionBy(numPartitions, realPartitionFunc)
       .mapPartitions<[K, C]>(mapFunction2);
   }
-  cache(storageType: StorageType = 'memory'): CacheRDD<T> {
+  persist(storageType: StorageType = 'memory'): CacheRDD<T> {
     return new CacheRDD(storageType, this);
+  }
+  cache(): CacheRDD<T> {
+    return this.persist('memory');
   }
   union(...others: RDD<T>[]): RDD<T> {
     return this.context.union(this, ...others);
@@ -461,7 +464,7 @@ export class CacheRDD<T> extends RDD<T> {
       payload: this.cacheId,
     };
   }
-  async release(): Promise<void> {
+  async unpersist(): Promise<void> {
     if (this.cacheId != null) {
       const { cacheId } = this;
       this.cacheId = null;
@@ -633,13 +636,29 @@ export class Context {
 
       decompressor?: (data: Buffer) => Buffer;
       functionEnv?: FunctionEnv;
+
+      __dangerousDontCopy?: boolean;
     },
   ): RDD<string> {
-    return this.wholeTextFiles(baseUrl, options).flatMap(v => {
-      const ret = v[1].replace(/\\r/m, '').split('\n');
-      // Fix memory leak: sliced string keep reference of huge string
-      // see https://bugs.chromium.org/p/v8/issues/detail?id=2869
-      return ret.map(v => (' ' + v).substr(1));
-    });
+    const { __dangerousDontCopy: dontCopy = false } = options || {};
+
+    return this.wholeTextFiles(baseUrl, options).flatMap(
+      v => {
+        const ret = v[1].replace(/\\r/m, '').split('\n');
+        // Remove last empty line.
+        if (!ret[ret.length - 1]) {
+          ret.pop();
+        }
+        if (dontCopy) {
+          return ret;
+        }
+        // Fix memory leak: sliced string keep reference of huge string
+        // see https://bugs.chromium.org/p/v8/issues/detail?id=2869
+        return ret.map(v => (' ' + v).substr(1));
+      },
+      {
+        dontCopy,
+      },
+    );
   }
 }
