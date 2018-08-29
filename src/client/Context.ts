@@ -636,7 +636,10 @@ export class Context {
     },
   ): RDD<string> {
     return this.wholeTextFiles(baseUrl, options).flatMap(v => {
-      return v[1].replace(/\\r/m, '').split('\n');
+      const ret = v[1].replace(/\\r/m, '').split('\n');
+      // Fix memory leak: sliced string keep reference of huge string
+      // see https://bugs.chromium.org/p/v8/issues/detail?id=2869
+      return ret.map(v => (' ' + v).substr(1));
     });
   }
 }
