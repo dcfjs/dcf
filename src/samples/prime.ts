@@ -1,6 +1,6 @@
 import { LocalClient } from '../client/LocalClient';
 import { Context } from '../client/Context';
-import { serialize, requireModule } from '../common/SerializeFunction';
+import { serialize, requireModule } from '../common/SerializedFunction';
 const zlib = require('zlib');
 
 function isPrime(v: number) {

@@ -4,10 +4,10 @@ import * as os from 'os';
 const path = require('path');
 const fs = require('fs-promise');
 import {
-  SerializeFunction,
+  SerializedFunction,
   serialize,
   requireModule,
-} from '../../common/SerializeFunction';
+} from '../../common/SerializedFunction';
 
 export function canHandleUrl(baseUrl: string): boolean {
   const url = parseUrl(baseUrl);
@@ -80,7 +80,7 @@ export async function listFiles(
 
 export function createDataLoader(
   baseUrl: string,
-): SerializeFunction<(filename: string) => Buffer | Promise<Buffer>> {
+): SerializedFunction<(filename: string) => Buffer | Promise<Buffer>> {
   const basePath = solvePath(baseUrl);
 
   function loader(filename: string) {
@@ -134,7 +134,7 @@ export async function initSaveProgress(
 
 export function createDataSaver(
   baseUrl: string,
-): SerializeFunction<
+): SerializedFunction<
   (filename: string, buffer: Buffer) => void | Promise<void>
 > {
   const basePath = solvePath(baseUrl);

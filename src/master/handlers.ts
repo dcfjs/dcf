@@ -3,10 +3,10 @@ import { MasterServer } from './MasterServer';
 import { registerHandler } from '../common/handler';
 import { Request } from '../client/Client';
 import {
-  SerializeFunction,
+  SerializedFunction,
   deserialize,
   serialize,
-} from '../common/SerializeFunction';
+} from '../common/SerializedFunction';
 
 export const CREATE_RDD = '@@master/createRDD';
 export const MAP = '@@master/map';
@@ -31,8 +31,8 @@ registerHandler(
       finalFunc,
     }: {
       subRequest: Request<any>;
-      partitionFunc: SerializeFunction<(arg: T[]) => T1>;
-      finalFunc: SerializeFunction<(arg: T1[]) => T1>;
+      partitionFunc: SerializedFunction<(arg: T[]) => T1>;
+      finalFunc: SerializedFunction<(arg: T1[]) => T1>;
     },
     context: MasterServer,
   ) => {

@@ -1,4 +1,4 @@
-import { SerializeFunction } from './SerializeFunction';
+import { SerializedFunction } from './SerializedFunction';
 import debug from '../common/debug';
 
 interface SubFunction {
@@ -6,7 +6,7 @@ interface SubFunction {
   source: string;
 }
 
-interface SerializeFunctionStruct {
+interface SerializedFunctionStruct {
   __isFunction: true;
   source: string;
   args: string[];
@@ -16,15 +16,15 @@ interface SerializeFunctionStruct {
 
 // Make serialized function seems callable, for better usage with upvalue functions.
 // But this could cause a error when you call it before serialize & deserialize.
-export type SerializeFunction<T extends (...args: any[]) => any> = T &
-  SerializeFunctionStruct;
+export type SerializedFunction<T extends (...args: any[]) => any> = T &
+  SerializedFunctionStruct;
 
 export type FunctionEnv = { [key: string]: any };
 
 export function serialize<T extends (...args: any[]) => any>(
   f: T,
   env?: FunctionEnv,
-): SerializeFunction<T> {
+): SerializedFunction<T> {
   const args: string[] = [];
   const values: any[] = [];
   const functions: any[] = [];
@@ -49,7 +49,7 @@ export function serialize<T extends (...args: any[]) => any>(
     args,
     values,
     functions,
-  } as SerializeFunctionStruct) as SerializeFunction<T>;
+  } as SerializedFunctionStruct) as SerializedFunction<T>;
 }
 
 export function requireModule(module: string) {
@@ -60,7 +60,7 @@ export function requireModule(module: string) {
 }
 
 export function deserialize<T extends (...args: any[]) => any>(
-  f: SerializeFunction<T>,
+  f: SerializedFunction<T>,
 ): T {
   return new Function(
     'debug',

@@ -2,8 +2,8 @@ import { StorageType } from './../common/types';
 import {
   FunctionEnv,
   requireModule,
-  SerializeFunction,
-} from './../common/SerializeFunction';
+  SerializedFunction,
+} from './../common/SerializedFunction';
 import {
   REDUCE,
   CREATE_RDD,
@@ -19,7 +19,7 @@ import {
   SAVE_FILE,
 } from './../master/handlers';
 import { Client, Request } from './Client';
-import { serialize } from '../common/SerializeFunction';
+import { serialize } from '../common/SerializedFunction';
 
 import { cogroup } from './join';
 

@@ -1,4 +1,4 @@
-import { SerializeFunction, deserialize } from '../common/SerializeFunction';
+import { SerializedFunction, deserialize } from '../common/SerializedFunction';
 import { registerHandler } from '../common/handler';
 import { StorageType } from '../common/types';
 import debug from '../common/debug';
@@ -157,12 +157,12 @@ registerHandler(
         partitions: string[];
         parts: string[][];
       };
-      mappers: SerializeFunction<(arg: any) => any>[];
+      mappers: SerializedFunction<(arg: any) => any>[];
       out: {
         type: 'reduce' | 'partitions' | 'parts' | 'saveFile';
         storageType: StorageType;
-        partitionFunc: SerializeFunction<(v: any[], arg: any) => any[][]>;
-        saveFunc: SerializeFunction<
+        partitionFunc: SerializedFunction<(v: any[], arg: any) => any[][]>;
+        saveFunc: SerializedFunction<
           (data: any[], filename: string) => void | Promise<void>
         >;
         args: any[];

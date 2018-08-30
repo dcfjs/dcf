@@ -1,7 +1,7 @@
 import { StorageType } from './../common/types';
 import { WorkerClient } from '../worker/WorkerClient';
 import { Request, Response } from '../client/Client';
-import { SerializeFunction, serialize } from '../common/SerializeFunction';
+import { SerializedFunction, serialize } from '../common/SerializedFunction';
 
 import * as workerActions from '../worker/handlers';
 import * as masterActions from './handlers';
@@ -18,10 +18,10 @@ type InArgs = {
 type OutArgs = {
   type: 'reduce' | 'partitions' | 'parts' | 'saveFile';
   storageType?: StorageType;
-  saveFunc?: SerializeFunction<
+  saveFunc?: SerializedFunction<
     (data: any[], filename: string) => void | Promise<void>
   >;
-  partitionFunc?: SerializeFunction<(v: any[], arg: any) => any[][]>;
+  partitionFunc?: SerializedFunction<(v: any[], arg: any) => any[][]>;
   args?: any[];
 };
 
@@ -40,12 +40,12 @@ export interface FileLoader {
   listFiles(baseUrl: string, recursive?: boolean): string[] | Promise<string[]>;
   createDataLoader(
     baseUrl: string,
-  ): SerializeFunction<(filename: string) => Buffer | Promise<Buffer>>;
+  ): SerializedFunction<(filename: string) => Buffer | Promise<Buffer>>;
 
   initSaveProgress(baseUrl: string, overwrite?: boolean): void | Promise<void>;
   createDataSaver(
     baseUrl: string,
-  ): SerializeFunction<
+  ): SerializedFunction<
     (filename: string, buffer: Buffer) => void | Promise<void>
   >;
   markSaveSuccess(baseUrl: string): void | Promise<void>;
@@ -123,7 +123,7 @@ export class MasterServer {
   async finalWork(
     ins: InArgs[],
     out: OutArgs | OutArgs[],
-    mappers: SerializeFunction<(arg: any) => any>[],
+    mappers: SerializedFunction<(arg: any) => any>[],
     task: TaskDetail,
     progressTotal: number,
   ): Promise<any[]> {
@@ -158,7 +158,7 @@ export class MasterServer {
   createRDD(
     args: any[],
     out: OutArgs | OutArgs[],
-    mappers: SerializeFunction<(arg: any) => any>[],
+    mappers: SerializedFunction<(arg: any) => any>[],
     task: TaskDetail,
   ): Promise<any> {
     const partitionArgs = this.splitByWorker(args);
@@ -200,7 +200,7 @@ export class MasterServer {
   async loadCache(
     id: number,
     out: OutArgs | OutArgs[],
-    mappers: SerializeFunction<(arg: any) => any>[],
+    mappers: SerializedFunction<(arg: any) => any>[],
     task: TaskDetail,
   ): Promise<any> {
     const { storageType, partitions } = this.caches[id];
@@ -294,7 +294,7 @@ export class MasterServer {
     numPartitions: number,
     parts: string[][],
     out: OutArgs | OutArgs[],
-    mappers: SerializeFunction<(arg: any) => any>[],
+    mappers: SerializedFunction<(arg: any) => any>[],
     task: TaskDetail,
   ): Promise<any> {
     // projection parts from [workers][newPartition] to [newPartition][workers]
@@ -375,7 +375,7 @@ export class MasterServer {
     baseUrl: string,
     recursive: boolean,
     out: OutArgs | OutArgs[],
-    mappers: SerializeFunction<(arg: any) => any>[],
+    mappers: SerializedFunction<(arg: any) => any>[],
     task: TaskDetail,
   ): Promise<any[]> {
     const loader = await this.getFileLoader(baseUrl, 'load');
@@ -430,7 +430,7 @@ export class MasterServer {
   async runWork(
     dependWork: Request<any>,
     out: OutArgs | OutArgs[],
-    mappers: SerializeFunction<(arg: any) => any>[] = [],
+    mappers: SerializedFunction<(arg: any) => any>[] = [],
     task: TaskDetail = this.getTaskDetail(dependWork),
   ): Promise<any[]> {
     const { type, payload } = dependWork;
