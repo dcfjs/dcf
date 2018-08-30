@@ -2,6 +2,10 @@
 
 > Early development stage: this project was still under early development, many necessery feature was not done yet, use it on your own risk.
 
+[Document](https://dcf.gitbook.io/dcf/)
+
+[API Reference](https://dcf.gitbook.io/dcf/api/)
+
 A node.js version of [Spark](https://spark.apache.org/), without hadoop or jvm.
 
 You should read [tutorial](src/samples/tutorial-0.ts) first, then you can learn Spark but use this project instead.
