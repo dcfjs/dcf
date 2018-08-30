@@ -1,7 +1,6 @@
 import { LocalMaster } from '../master/LocalMaster';
-import { Client, Request, ResponseMessage } from './Client';
+import { Client, Request, Response, ResponseMessage } from './Client';
 import * as os from 'os';
-import { Response } from '../../lib/client/Client';
 import * as ProgressBar from 'progress';
 
 export class LocalClient implements Client {

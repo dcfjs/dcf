@@ -1,7 +1,6 @@
-import { Response } from './../../lib/client/Client.d';
 import { StorageType } from './../common/types';
 import { WorkerClient } from '../worker/WorkerClient';
-import { Request } from '../client/Client';
+import { Request, Response } from '../client/Client';
 import { SerializeFunction, serialize } from '../common/SerializeFunction';
 
 import * as workerActions from '../worker/handlers';
