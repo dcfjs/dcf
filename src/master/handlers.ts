@@ -6,7 +6,7 @@ import {
   SerializedFunction,
   deserialize,
   serialize,
-} from '../common/SerializedFunction';
+} from '../common/SerializeFunction';
 
 export const CREATE_RDD = '@@master/createRDD';
 export const MAP = '@@master/map';

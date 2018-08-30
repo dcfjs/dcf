@@ -7,7 +7,7 @@ import {
   SerializedFunction,
   serialize,
   requireModule,
-} from '../../common/SerializedFunction';
+} from '../../common/SerializeFunction';
 
 export function canHandleUrl(baseUrl: string): boolean {
   const url = parseUrl(baseUrl);

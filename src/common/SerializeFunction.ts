@@ -1,4 +1,3 @@
-import { SerializedFunction } from './SerializedFunction';
 import debug from '../common/debug';
 
 interface SubFunction {

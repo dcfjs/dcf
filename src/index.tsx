@@ -1,3 +1,3 @@
 export * from './client';
 export * from './common/types';
-export * from './common/SerializedFunction';
+export * from './common/SerializeFunction';

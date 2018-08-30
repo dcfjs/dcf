@@ -2,8 +2,8 @@ import { StorageType } from './../common/types';
 import {
   FunctionEnv,
   requireModule,
-  SerializedFunction,
-} from './../common/SerializedFunction';
+  serialize,
+} from './../common/SerializeFunction';
 import {
   REDUCE,
   CREATE_RDD,
@@ -19,7 +19,6 @@ import {
   SAVE_FILE,
 } from './../master/handlers';
 import { Client, Request } from './Client';
-import { serialize } from '../common/SerializedFunction';
 
 import { cogroup } from './join';
 
@@ -51,7 +50,7 @@ export class RDD<T> {
     throw new Error('Must be overrided.');
   }
 
-  async collect(): Promise<T[][]> {
+  async collect(): Promise<T[]> {
     return this.context.client.request({
       type: REDUCE,
       payload: {
@@ -102,7 +101,7 @@ export class RDD<T> {
       },
     });
   }
-  async max(): Promise<number | null> {
+  async max(): Promise<T | null> {
     return this.context.client.request({
       type: REDUCE,
       payload: {
@@ -122,7 +121,7 @@ export class RDD<T> {
       },
     });
   }
-  async min(): Promise<number> {
+  async min(): Promise<T | null> {
     return this.context.client.request({
       type: REDUCE,
       payload: {
@@ -169,7 +168,10 @@ export class RDD<T> {
       func,
     });
   }
-  async reduce(func: ((a: T, b: T) => T), env?: FunctionEnv): Promise<number> {
+  async reduce(
+    func: ((a: T, b: T) => T),
+    env?: FunctionEnv,
+  ): Promise<T | null> {
     if (typeof func === 'function') {
       func = serialize(func, env);
     }

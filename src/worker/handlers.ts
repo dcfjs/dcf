@@ -1,4 +1,4 @@
-import { SerializedFunction, deserialize } from '../common/SerializedFunction';
+import { SerializedFunction, deserialize } from '../common/SerializeFunction';
 import { registerHandler } from '../common/handler';
 import { StorageType } from '../common/types';
 import debug from '../common/debug';

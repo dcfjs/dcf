@@ -1,7 +1,7 @@
 import { StorageType } from './../common/types';
 import { WorkerClient } from '../worker/WorkerClient';
 import { Request, Response } from '../client/Client';
-import { SerializedFunction, serialize } from '../common/SerializedFunction';
+import { SerializedFunction, serialize } from '../common/SerializeFunction';
 
 import * as workerActions from '../worker/handlers';
 import * as masterActions from './handlers';
