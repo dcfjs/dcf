@@ -9,7 +9,7 @@
     "dcf-shell": "lib/cli/index.js"
   },
   "scripts": {
-    "start": "cross-env NODE_NO_WARNINGS=1 DEBUG=\"dcf:master,dcf:worker:*\" ts-node src/cli/index.ts",
+    "start": "cross-env NODE_NO_WARNINGS=1 DCF_PROGRESS=0 DEBUG=\"dcf:master,dcf:worker:*\" ts-node src/cli/index.ts",
     "ts-node": "cross-env NODE_NO_WARNINGS=1 DEBUG=\"dcf:master,dcf:worker:*\" ts-node",
     "build": "tsc",
     "prepare": "npm run build"

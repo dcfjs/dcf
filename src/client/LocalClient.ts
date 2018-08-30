@@ -3,6 +3,8 @@ import { Client, Request, Response, ResponseMessage } from './Client';
 import * as os from 'os';
 import * as ProgressBar from 'progress';
 
+const showProgress = process.env['DCF_PROGRESS'] !== '0';
+
 export class LocalClient implements Client {
   master: LocalMaster;
   progress: ProgressBar | null = null;
@@ -49,15 +51,17 @@ export class LocalClient implements Client {
         if (this.progress) {
           this.progress.terminate();
         }
-        this.progress = new ProgressBar(
-          `Task ${m.taskIndex}/${
-            m.tasks
-          } :percent [:bar] Partition :current/:total :rate/s :etas`,
-          {
-            total: m.partitions,
-            width: 30,
-          },
-        );
+        if (showProgress) {
+          this.progress = new ProgressBar(
+            `Task ${m.taskIndex}/${
+              m.tasks
+            } :percent [:bar] Partition :current/:total :rate/s :etas`,
+            {
+              total: m.partitions,
+              width: 30,
+            },
+          );
+        }
         break;
       }
       case 'progress': {
