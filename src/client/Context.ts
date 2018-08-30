@@ -745,7 +745,10 @@ export class Context {
       encoding?: string;
       recursive?: boolean;
 
-      decompressor?: (data: Buffer) => Buffer | Promise<Buffer>;
+      decompressor?: (
+        data: Buffer,
+        filename: string,
+      ) => Buffer | Promise<Buffer>;
       functionEnv?: FunctionEnv;
     } = {},
   ): RDD<[string, string]> {
@@ -760,7 +763,7 @@ export class Context {
       async v => {
         let buf = v[0][1];
         if (decompressor) {
-          buf = await decompressor(buf);
+          buf = await decompressor(buf, v[0][0]);
         }
         return [[v[0][0], buf.toString(encoding)] as [string, string]];
       },
@@ -774,7 +777,10 @@ export class Context {
       encoding?: string;
       recursive?: boolean;
 
-      decompressor?: (data: Buffer) => Buffer;
+      decompressor?: (
+        data: Buffer,
+        filename: string,
+      ) => Buffer | Promise<Buffer>;
       functionEnv?: FunctionEnv;
 
       __dangerousDontCopy?: boolean;
