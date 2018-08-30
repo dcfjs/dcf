@@ -33,10 +33,10 @@ await dcc
 - [x] cache
 - [x] file loader & saver
 - [x] export module to npm
+- [x] decompresser & compresser
+- [x] use debug module for information/error
+- [x] provide a progress bar.
 - [ ] distributed master.
-- [ ] use debug module for information/error
-- [ ] decompresser & compresser
-- [ ] add configure system.
 - [ ] sort
 - [ ] aliyun oss loader
 
