@@ -1,4 +1,4 @@
-## Distributed Computing Framework for Node.js
+# Distributed Computing Framework for Node.js
 
 > Early development stage: this project was still under early development, many necessery feature was not done yet, use it on your own risk.
 
@@ -10,7 +10,7 @@ A node.js version of [Spark](https://spark.apache.org/), without hadoop or jvm.
 
 You should read [tutorial](src/samples/tutorial-0.ts) first, then you can learn Spark but use this project instead.
 
-#### Async API & deferred API
+## Async API & deferred API
 
 Any api that requires a RDD and generate a result is async, like `count`, `take`, `max` ...
 Any api that creates a RDD is deferred API, which is not async, so you can chain them like this:
@@ -23,7 +23,9 @@ await dcc
   .take(10); // take is not deferred api but async
 ```
 
-#### Milestones
+## Milestones
+
+#### 0.1.x: Basic
 
 - [x] local master.
 - [x] rdd & partition creation & release.
@@ -36,9 +38,17 @@ await dcc
 - [x] decompresser & compresser
 - [x] use debug module for information/error
 - [x] provide a progress bar.
-- [ ] distributed master.
+- [ ] sample
 - [ ] sort
+
+#### 0.2.x: Remote mode
+
+- [ ] distributed master
+- [ ] runtime sandbox
+- [ ] plugin system
+- [ ] remote dependency management
 - [ ] aliyun oss loader
+- [ ] hdfs loader
 
 ## How to use
 
