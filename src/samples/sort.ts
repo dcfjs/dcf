@@ -22,11 +22,24 @@ async function main() {
       .collect(),
   );
 
+  const arr = await dcc
+    .range(0, 1000000)
+    .sort(false)
+    .collect();
+
+  for (let i = 0; i < arr.length - 1; i++) {
+    if (arr[i] < arr[i + 1]) {
+      console.log('Error!');
+    }
+  }
+
   console.log(
     await dcc
       .range(0, 1000000)
       .sort(false)
-      .take(10),
+      .glom()
+      .map(v => v.length)
+      .collect(),
   );
 
   await rdd.unpersist();

@@ -677,7 +677,7 @@ export class MasterServer {
         let p = samples.length / numPartitions;
         for (let i = 1; i < numPartitions; i++) {
           let idx = Math.floor(p * i);
-          if (idx < points.length) {
+          if (idx < samples.length) {
             points.push(samples[idx]);
           }
         }
