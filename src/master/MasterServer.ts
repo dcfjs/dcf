@@ -5,7 +5,7 @@ import { SerializedFunction, serialize } from '../common/SerializeFunction';
 
 import * as workerActions from '../worker/handlers';
 import * as masterActions from './handlers';
-import { setDebugFunc } from '../common/debug';
+import debug, { setDebugFunc } from '../common/debug';
 import { processRequest } from '../common/handler';
 
 type InArgs = {
@@ -21,7 +21,9 @@ type OutArgs = {
   saveFunc?: SerializedFunction<
     (data: any[], filename: string) => void | Promise<void>
   >;
-  partitionFunc?: SerializedFunction<(v: any[], arg: any) => any[][]>;
+  partitionFunc?: SerializedFunction<
+    (v: any[], arg: any, partitionIndex: number) => any[][]
+  >;
   args?: any[];
 };
 
@@ -95,6 +97,20 @@ export class MasterServer {
     return processRequest(m, this);
   }
 
+  // TODO: make split more even.
+  // change [3, 3, 3, 2, 2] into [3, 2, 3, 2, 3]
+  getSplitIndecies(count: number): number[][] {
+    const ret: number[][] = [];
+    const workerCount = this.workers.length;
+    for (let i = 0; i < workerCount; i++) {
+      ret.push([]);
+    }
+    for (let i = 0; i < count; i++) {
+      ret[i % workerCount].push(i);
+    }
+    return ret;
+  }
+
   splitByWorker<T>(args: T[]): T[][] {
     const ret: T[][] = [];
     for (const worker of this.workers) {
@@ -122,8 +138,9 @@ export class MasterServer {
   // final work for even distribution.
   async finalWork(
     ins: InArgs[],
+    indecies: number[][],
     out: OutArgs | OutArgs[],
-    mappers: SerializedFunction<(arg: any) => any>[],
+    mappers: SerializedFunction<(arg: any, partitionIndex: number) => any>[],
     task: TaskDetail,
     progressTotal: number,
   ): Promise<any[]> {
@@ -135,6 +152,7 @@ export class MasterServer {
           type: workerActions.CALC,
           payload: {
             in: ins[i],
+            indecies,
             mappers,
             out: Array.isArray(out) ? out[i] : out,
           },
@@ -158,9 +176,10 @@ export class MasterServer {
   createRDD(
     args: any[],
     out: OutArgs | OutArgs[],
-    mappers: SerializedFunction<(arg: any) => any>[],
+    mappers: SerializedFunction<(arg: any, partitionIndex: number) => any>[],
     task: TaskDetail,
   ): Promise<any> {
+    const indecies = this.getSplitIndecies(args.length);
     const partitionArgs = this.splitByWorker(args);
 
     if (!Array.isArray(out) && Array.isArray(out.args)) {
@@ -181,6 +200,7 @@ export class MasterServer {
             args: v,
           } as InArgs),
       ),
+      indecies,
       out,
       mappers,
       task,
@@ -188,7 +208,7 @@ export class MasterServer {
     );
   }
 
-  async addCache(storageType: StorageType, partitions: Partition[]) {
+  addCache(storageType: StorageType, partitions: Partition[]) {
     const id = ++this.cacheIdCounter;
     this.caches[id] = {
       storageType,
@@ -200,7 +220,7 @@ export class MasterServer {
   async loadCache(
     id: number,
     out: OutArgs | OutArgs[],
-    mappers: SerializedFunction<(arg: any) => any>[],
+    mappers: SerializedFunction<(arg: any, partitionIndex: number) => any>[],
     task: TaskDetail,
   ): Promise<any> {
     const { storageType, partitions } = this.caches[id];
@@ -239,6 +259,7 @@ export class MasterServer {
           type: workerActions.CALC,
           payload: {
             in: inArgs[i].in,
+            indecies: inArgs[i].indecies,
             mappers,
             out: Array.isArray(out) ? out[i] : out,
           },
@@ -294,7 +315,7 @@ export class MasterServer {
     numPartitions: number,
     parts: string[][],
     out: OutArgs | OutArgs[],
-    mappers: SerializedFunction<(arg: any) => any>[],
+    mappers: SerializedFunction<(arg: any, partitionIndex: number) => any>[],
     task: TaskDetail,
   ): Promise<any> {
     // projection parts from [workers][newPartition] to [newPartition][workers]
@@ -313,6 +334,7 @@ export class MasterServer {
       );
     }
 
+    const indecies = this.getSplitIndecies(numPartitions);
     const partitionParts = this.splitByWorker(parts);
 
     return this.finalWork(
@@ -323,6 +345,7 @@ export class MasterServer {
             parts: v,
           } as InArgs),
       ),
+      indecies,
       out,
       mappers,
       task,
@@ -336,6 +359,7 @@ export class MasterServer {
       case masterActions.CREATE_RDD:
       case masterActions.REPARTITION:
       case masterActions.COALESCE:
+      case masterActions.SORT:
         return payload.numPartitions;
       case masterActions.LOAD_CACHE:
         const id: number = payload;
@@ -375,7 +399,7 @@ export class MasterServer {
     baseUrl: string,
     recursive: boolean,
     out: OutArgs | OutArgs[],
-    mappers: SerializedFunction<(arg: any) => any>[],
+    mappers: SerializedFunction<(arg: any, partitionIndex: number) => any>[],
     task: TaskDetail,
   ): Promise<any[]> {
     const loader = await this.getFileLoader(baseUrl, 'load');
@@ -421,7 +445,17 @@ export class MasterServer {
       case masterActions.COALESCE: {
         const { subRequest } = payload;
         out.total += 1;
-        this.getTaskDetail(subRequest);
+        this.getTaskDetail(subRequest, out);
+        break;
+      }
+      case masterActions.SORT: {
+        const { subRequest } = payload;
+        out.total += 2;
+        if (subRequest.type !== masterActions.LOAD_CACHE) {
+          out.total += 1;
+        }
+        this.getTaskDetail(subRequest, out);
+        break;
       }
     }
     return out;
@@ -430,7 +464,9 @@ export class MasterServer {
   async runWork(
     dependWork: Request<any>,
     out: OutArgs | OutArgs[],
-    mappers: SerializedFunction<(arg: any) => any>[] = [],
+    mappers: SerializedFunction<
+      (arg: any, partitionIndex: number) => any
+    >[] = [],
     task: TaskDetail = this.getTaskDetail(dependWork),
   ): Promise<any[]> {
     const { type, payload } = dependWork;
@@ -568,6 +604,190 @@ export class MasterServer {
 
         // Step 2: join pieces and go on.
         return this.joinPieces(numPartitions, pieces, out, mappers, task);
+      }
+
+      case masterActions.SORT: {
+        const { subRequest, ascending, numPartitions, keyFunc } = payload;
+        let cacheId;
+
+        // Step 1: Maybe cache
+        if (subRequest.type !== masterActions.LOAD_CACHE) {
+          // Auto cache with disk storage.
+          // TODO: use MEMORY_OR_DISK instead.
+          const storageType = 'disk';
+          const partitions = await this.runWork(subRequest, {
+            type: 'partitions',
+            storageType,
+          });
+          cacheId = this.addCache(storageType, partitions);
+        } else {
+          cacheId = subRequest.payload;
+        }
+
+        let originRequest = {
+          type: masterActions.LOAD_CACHE,
+          payload: cacheId,
+        };
+
+        // Step 2: sample with 1/n fraction where n is origin partition count.
+        // So we get a sample count near to a single partition.
+        // Sample contains partitionIndex & localIndex to avoid performance issue
+        //   when dealing with too many same values.
+        let originPartitionNum = await this.getPartitionCount(originRequest);
+
+        const samples: [any, number, number][] = ([] as any[]).concat(
+          ...(await this.runWork(
+            originRequest,
+            {
+              type: 'reduce',
+            },
+            [
+              serialize(
+                (v: any[], partitionId: number) => {
+                  const ret = [];
+                  for (let i = 0; i < v.length; i++) {
+                    if (Math.random() * originPartitionNum < 1) {
+                      ret.push([keyFunc(v[i]), partitionId, i]);
+                    }
+                  }
+                  return ret;
+                },
+                {
+                  keyFunc,
+                  originPartitionNum,
+                },
+              ),
+            ],
+          )),
+        );
+
+        // Step 3: sort samples, and get seperate points.
+        samples.sort((a, b) => {
+          if (a[0] !== b[0]) {
+            return a[0] < b[0] ? -1 : 1;
+          }
+          if (a[1] !== b[1]) {
+            return a[1] < b[1] ? -1 : 1;
+          }
+          return a[2] < b[2] ? -1 : 1;
+        });
+
+        // get n-1 points in samples.
+        const points: [any, number, number][] = [];
+        let p = samples.length / numPartitions;
+        for (let i = 1; i < numPartitions; i++) {
+          let idx = Math.floor(p * i);
+          if (idx < points.length) {
+            points.push(samples[idx]);
+          }
+        }
+
+        // Step 4: Repartition
+        let pieces: string[][] = await this.runWork(
+          originRequest,
+          {
+            type: 'parts',
+            partitionFunc: serialize(
+              (v: any[], arg: any, partitionIndex: number) => {
+                const ret: any[][] = [];
+                for (let i = 0; i < numPartitions; i++) {
+                  ret.push([]);
+                }
+                const tmp = v.map((item, i) => [keyFunc(item), i]);
+                tmp.sort((a, b) => {
+                  if (a[0] !== b[0]) {
+                    return a[0] < b[0] ? -1 : 1;
+                  }
+                  return a[1] < b[1] ? -1 : 1;
+                });
+                let index = 0;
+                for (const [key, i] of tmp) {
+                  // compare with points
+                  for (; index < points.length; ) {
+                    if (key < points[index][0]) {
+                      break;
+                    }
+                    if (key > points[index][0]) {
+                      index++;
+                      continue;
+                    }
+                    if (partitionIndex < points[index][1]) {
+                      break;
+                    }
+                    if (partitionIndex > points[index][1]) {
+                      index++;
+                      continue;
+                    }
+                    if (i < points[index][2]) {
+                      break;
+                    }
+                    index++;
+                  }
+                  ret[index].push([v[i], partitionIndex, i]);
+                }
+                return ret;
+              },
+              {
+                keyFunc,
+                numPartitions,
+                points,
+              },
+            ),
+          },
+          [],
+          task,
+        );
+
+        // Release temporary cache.
+        if (subRequest.type !== masterActions.LOAD_CACHE) {
+          // Release auto cache.
+          await this.releaseCache(cacheId);
+        }
+
+        // Step 5: Sort in partition.
+        // Maybe reverse (if ascending == false).
+        mappers.unshift(
+          serialize(
+            (v: any[]) => {
+              const tmp = v.map((item, i) => [
+                keyFunc(item[0]),
+                item[1],
+                item[2],
+                i,
+              ]);
+              tmp.sort((a, b) => {
+                if (a[0] !== b[0]) {
+                  return a[0] < b[0] ? -1 : 1;
+                }
+                if (a[1] !== b[1]) {
+                  return a[1] < b[1] ? -1 : 1;
+                }
+                return a[2] < b[2] ? -1 : 1;
+              });
+              const ret = tmp.map(item => v[item[3]][0]);
+              if (!ascending) {
+                ret.reverse();
+              }
+              return ret;
+            },
+            {
+              keyFunc,
+              ascending,
+            },
+          ),
+        );
+        const ret = await this.joinPieces(
+          numPartitions,
+          pieces,
+          out,
+          mappers,
+          task,
+        );
+        if (!ascending) {
+          ret.reverse();
+        }
+
+        return ret;
       }
 
       default:

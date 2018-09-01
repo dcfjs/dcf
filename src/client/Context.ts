@@ -17,6 +17,7 @@ import {
   LOAD_FILE,
   GET_NUM_PARTITIONS,
   SAVE_FILE,
+  SORT,
 } from './../master/handlers';
 import { Client, Request } from './Client';
 
@@ -565,6 +566,31 @@ export class RDD<T> {
       }
       return ret;
     });
+  }
+
+  sort(ascending: boolean = true, numPartitions?: number) {
+    return this.sortBy(v => v, ascending, numPartitions);
+  }
+
+  sortBy<K>(
+    keyFunc: (data: T) => K,
+    ascending: boolean = true,
+    numPartitions?: number,
+    env?: FunctionEnv,
+  ): RDD<T> {
+    if (typeof keyFunc === 'function') {
+      keyFunc = serialize(keyFunc, env);
+    }
+    const generateTask = async () => ({
+      type: SORT,
+      payload: {
+        subRequest: await this.generateTask(),
+        keyFunc,
+        ascending,
+        numPartitions: numPartitions || this.context.client.workerCount(),
+      },
+    });
+    return new GeneratedRDD<T>(this.context, generateTask);
   }
 }
 

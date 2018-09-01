@@ -17,6 +17,7 @@ export const CONCAT = '@@master/concat';
 export const LOAD_FILE = '@@master/loadFile';
 export const GET_NUM_PARTITIONS = '@@master/getNumPartitions';
 export const SAVE_FILE = '@@master/saveFile';
+export const SORT = '@@master/SORT';
 
 export const CACHE = '@@master/cache';
 export const LOAD_CACHE = '@@master/loadCache';

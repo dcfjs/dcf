@@ -39,7 +39,9 @@ await dcc
 - [x] use debug module for information/error
 - [x] provide a progress bar.
 - [ ] sample
-- [ ] sort
+- [x] sort
+- [ ] storage MEMORY_OR_DISK, and use it in sort
+- [ ] storage MEMORY_SER，storage in memory but off v8 heap.
 
 #### 0.2.x: Remote mode
 

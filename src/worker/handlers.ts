@@ -120,16 +120,20 @@ async function getRepartitionPart<T>(id: PartId): Promise<T[]> {
 }
 
 // Iterator an array with a async function, and break promise chain to keep memory safe.
-function safeRepeat<T>(arr: T[], func: (arg: T) => void | Promise<void>) {
+function safeRepeat<T>(
+  arr: T[],
+  func: (arg: T, index: number) => void | Promise<void>,
+) {
   return new Promise((resolve, reject) => {
-    let index = 0;
+    let index = -1;
 
     function next() {
+      index++;
       if (index >= arr.length) {
         resolve();
         return;
       }
-      Promise.resolve(func(arr[index++])).then(next, reject);
+      Promise.resolve(func(arr[index], index)).then(next, reject);
     }
     next();
   });
@@ -141,6 +145,7 @@ registerHandler(
   async (
     {
       in: { type: inType, args, partitions, parts, storageType: inStorageType },
+      indecies,
       mappers,
       out: {
         type: outType,
@@ -157,11 +162,14 @@ registerHandler(
         partitions: string[];
         parts: string[][];
       };
-      mappers: SerializedFunction<(arg: any) => any>[];
+      indecies: number[];
+      mappers: SerializedFunction<(arg: any, partitionIndex: number) => any>[];
       out: {
         type: 'reduce' | 'partitions' | 'parts' | 'saveFile';
         storageType: StorageType;
-        partitionFunc: SerializedFunction<(v: any[], arg: any) => any[][]>;
+        partitionFunc: SerializedFunction<
+          (v: any[], arg: any, partitionIndex: number) => any[][]
+        >;
         saveFunc: SerializedFunction<
           (data: any[], filename: string) => void | Promise<void>
         >;
@@ -176,6 +184,7 @@ registerHandler(
     const doPartition = (outType === 'parts' && deserialize(partitionFunc)) as (
       v: any[],
       arg: any,
+      partitinIndex: number,
     ) => any[][];
 
     const doSave = (outType === 'saveFile' && deserialize(saveFunc)) as ((
@@ -183,12 +192,13 @@ registerHandler(
       filename: string,
     ) => void | Promise<void>);
 
-    let index = 0;
-    async function work(partition: any) {
+    async function work(partition: any, index: number) {
       let ret = partition;
 
+      const partitionIndex = indecies[index];
+
       await safeRepeat(funcs, async func => {
-        ret = await func(ret);
+        ret = await func(ret, partitionIndex);
       });
 
       switch (outType) {
@@ -201,7 +211,11 @@ registerHandler(
           break;
         }
         case 'parts': {
-          const tmp = doPartition(ret, outArgs && outArgs[index++]);
+          const tmp = doPartition(
+            ret,
+            outArgs && outArgs[index],
+            partitionIndex,
+          );
           await Promise.all(
             tmp.map(async (v, j) => {
               if (!v || v.length === 0) {
@@ -217,7 +231,7 @@ registerHandler(
           break;
         }
         case 'saveFile': {
-          await doSave(ret, outArgs[index++]);
+          await doSave(ret, outArgs[index]);
         }
       }
 
@@ -225,22 +239,22 @@ registerHandler(
     }
     switch (inType) {
       case 'value': {
-        await safeRepeat(args, arg => work(arg));
+        await safeRepeat(args, work);
         break;
       }
       case 'partitions': {
-        await safeRepeat(partitions, async id => {
-          await work(await getPartitionData(inStorageType, id));
+        await safeRepeat(partitions, async (id, index) => {
+          await work(await getPartitionData(inStorageType, id), index);
         });
         break;
       }
       case 'parts': {
-        await safeRepeat(parts, async part => {
+        await safeRepeat(parts, async (part, index) => {
           const pieces = await Promise.all(
             part.map(v => getRepartitionPart(v)),
           );
           let v: any = ([] as any).concat(...pieces);
-          await work(v);
+          await work(v, index);
         });
         break;
       }
