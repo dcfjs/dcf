@@ -42,6 +42,20 @@ async function main() {
       .collect(),
   );
 
+  console.log(
+    await dcc
+      .range(0, 1000000)
+      .sortBy(v => {
+        for (let j = 2; j < 1000; j++) {
+          if (v % j === 0) {
+            return j;
+          }
+        }
+        return v;
+      }, false)
+      .take(10),
+  );
+
   await rdd.unpersist();
   // Shutdown
   client.dispose();
