@@ -70,10 +70,19 @@ registerHandler(
     const fileLoader = await context.getFileLoader(baseUrl, 'save');
     await fileLoader.initSaveProgress(baseUrl, overwrite);
     const numPartitions = await context.getPartitionCount(subRequest);
+
+    const radix =
+      numPartitions <= 10000000 ? 10 : numPartitions <= 0x10000000 ? 16 : 36;
+    const digits =
+      numPartitions <= 100000 ? 5 : numPartitions <= 1000000 ? 6 : 7;
+
     const args = new Array(numPartitions)
       .fill(0)
       .map(
-        (v, i) => `part-${('000000' + i.toString(16)).substr(-6)}.${extension}`,
+        (v, i) =>
+          `part-${('0000000' + i.toString(radix)).substr(
+            -digits,
+          )}.${extension}`,
       );
 
     const saver = fileLoader.createDataSaver(baseUrl);
