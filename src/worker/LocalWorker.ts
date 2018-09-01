@@ -3,6 +3,7 @@ import { Request, Response } from '../client';
 import { INIT, EXIT } from './handlers';
 import { WorkerClient } from './WorkerClient';
 import { LocalMaster } from '../master/LocalMaster';
+const v8 = require('v8');
 
 const entryScript = require.resolve('./localEntry');
 const isType = /\.ts$/.test(entryScript);
@@ -40,7 +41,13 @@ export class LocalWorker extends WorkerClient {
       },
     });
   }
-  onMessage = (r: Response) => {
+  sendToWorker(m: Request<any>) {
+    if (this.worker) {
+      this.worker.send(v8.serialize(m).toString('base64'));
+    }
+  }
+  onMessage = (buf: string) => {
+    const r = v8.deserialize(Buffer.from(buf, 'base64'));
     switch (r.type) {
       case 'resp': {
         const msg = this.sequence.shift();
@@ -84,7 +91,7 @@ export class LocalWorker extends WorkerClient {
         throw new Error('Worker not inited.');
       }
       this.sequence.push([resolve, reject]);
-      this.worker.send(m);
+      this.sendToWorker(m);
     });
   }
   async dispose() {
@@ -94,7 +101,7 @@ export class LocalWorker extends WorkerClient {
       }
       this.waitExit = resolve;
       // Do not wait for response.
-      this.worker.send({
+      this.sendToWorker({
         type: EXIT,
       });
     });
