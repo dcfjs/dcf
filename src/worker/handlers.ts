@@ -48,6 +48,7 @@ async function saveNewPartition<T>(storageType: StorageType, data: T[]) {
     case 'disk': {
       const buf = v8.serialize(data);
       await fs.writeFile(`tmp/${wid}-${id}.partition`, buf);
+      break;
     }
     case 'memory':
       partitions[id] = data;
