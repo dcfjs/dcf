@@ -42,6 +42,7 @@ await dcc
 - [x] sort
 - [ ] storage MEMORY_OR_DISK, and use it in sort
 - [ ] storage MEMORY_SER，storage in memory but off v8 heap.
+- [ ] config default partition count.
 
 #### 0.2.x: Remote mode
 
