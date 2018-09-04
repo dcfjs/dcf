@@ -24,7 +24,7 @@ import { Client, Request } from './Client';
 import { cogroup } from './join';
 
 const XXHash = require('xxhash');
-const msgpack = require('msgpack');
+const msgpack = require('msgpack5');
 const v8 = require('v8');
 
 type ResponseFactory<T> = (rdd: RDD<T>) => Request<any> | Promise<Request<any>>;
@@ -42,7 +42,7 @@ function hashPartitionFunc<V>(numPartitions: number) {
       seed,
       XXHash: requireModule('xxhash'),
       v8: requireModule('v8'),
-      msgpack: requireModule('msgpack'),
+      msgpack: requireModule('msgpack5'),
     },
   );
 }
@@ -243,7 +243,7 @@ export class RDD<T> {
         return ret;
       },
       {
-        msgpack: requireModule('msgpack'),
+        msgpack: requireModule('msgpack5'),
         v8: requireModule('v8'),
       },
     );
@@ -358,7 +358,7 @@ export class RDD<T> {
         createCombiner,
         mergeValue,
         v8: requireModule('v8'),
-        msgpack: requireModule('msgpack'),
+        msgpack: requireModule('msgpack5'),
       },
     );
 
@@ -383,7 +383,7 @@ export class RDD<T> {
       {
         mergeCombiners,
         v8: requireModule('v8'),
-        msgpack: requireModule('msgpack'),
+        msgpack: requireModule('msgpack5'),
       },
     );
 
