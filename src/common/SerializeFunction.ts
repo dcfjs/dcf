@@ -77,7 +77,7 @@ export function deserialize<T extends (...args: any[]) => any>(
     'wrap',
     ...f.args,
     f.functions
-      .map(v => `var ${v.name} = (function(){return wrap(${v.source};}))();\n`)
+      .map(v => `var ${v.name} = (function(){return wrap(${v.source});})();\n`)
       .join('') +
       'return wrap(' +
       f.source +

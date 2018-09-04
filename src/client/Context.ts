@@ -38,6 +38,7 @@ function hashPartitionFunc<V>(numPartitions: number) {
       return XXHash.hash(pack.encode(data), seed) % numPartitions;
     },
     {
+      pack,
       numPartitions,
       seed,
       XXHash: requireModule('xxhash'),
