@@ -205,7 +205,7 @@ export class RDD<T> {
       func = serialize(func, env);
     }
     return this.mapPartitions(
-      (partition: T[]) => ([] as T1[]).concat(...partition.map(func)),
+      (partition: T[]) => partition.map(func).reduce((pre,c) => pre.concat(c),[] as T1[]),
       {
         func,
       },
