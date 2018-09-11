@@ -152,7 +152,7 @@ export class MasterServer {
           type: workerActions.CALC,
           payload: {
             in: ins[i],
-            indecies,
+            indecies: indecies[i],
             mappers,
             out: Array.isArray(out) ? out[i] : out,
           },
