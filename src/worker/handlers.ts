@@ -3,6 +3,7 @@ import { registerHandler } from '../common/handler';
 import { StorageType } from '../common/types';
 import debug from '../common/debug';
 import WorkerContext from './WorkerContext';
+import concatArrays from '../common/concatArrays';
 
 const fs = require('fs-promise');
 const v8 = require('v8');
@@ -117,7 +118,7 @@ async function getRepartitionPart<T>(id: PartId): Promise<T[]> {
     index += length + 4;
   }
   await fs.unlink(id);
-  return ([] as T[]).concat(...ret);
+  return concatArrays(ret);
 }
 
 // Iterator an array with a async function, and break promise chain to keep memory safe.
@@ -254,7 +255,7 @@ registerHandler(
           const pieces = await Promise.all(
             part.map(v => getRepartitionPart(v)),
           );
-          let v: any = ([] as any).concat(...pieces);
+          let v: any = concatArrays(pieces);
           await work(v, index);
         });
         break;
