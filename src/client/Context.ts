@@ -25,19 +25,21 @@ import { cogroup } from './join';
 import concatArrays from '../common/concatArrays';
 
 const XXHash = require('xxhash');
-const v8 = require('v8');
 
 type ResponseFactory<T> = (rdd: RDD<T>) => Request<any> | Promise<Request<any>>;
 
 function hashPartitionFunc<V>(numPartitions: number) {
   const seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
   return serialize(
-    (data: V) => XXHash.hash(v8.serialize(data), seed) % numPartitions,
+    (data: V) => {
+      return (
+        XXHash.hash(Buffer.from(JSON.stringify(data)), seed) % numPartitions
+      );
+    },
     {
       numPartitions,
       seed,
       XXHash: requireModule('xxhash'),
-      v8: requireModule('v8'),
     },
   );
 }
@@ -223,23 +225,18 @@ export class RDD<T> {
     return this.partitionBy(
       numPartitions,
       hashPartitionFunc<T>(numPartitions),
-    ).mapPartitions(
-      datas => {
-        const ret = [];
-        const map: { [key: string]: T } = {};
-        for (const item of datas) {
-          const k = v8.serialize(item).toString('base64');
-          if (!map[k]) {
-            map[k] = item;
-            ret.push(item);
-          }
+    ).mapPartitions(datas => {
+      const ret = [];
+      const map: { [key: string]: T } = {};
+      for (const item of datas) {
+        const k = JSON.stringify(item);
+        if (!map[k]) {
+          map[k] = item;
+          ret.push(item);
         }
-        return ret;
-      },
-      {
-        v8: requireModule('v8'),
-      },
-    );
+      }
+      return ret;
+    }, {});
   }
   repartition(numPartitions: number): RDD<T> {
     return this.partitionBy(
@@ -334,7 +331,7 @@ export class RDD<T> {
         const ret = [];
         const map: { [key: string]: [K, C] } = {};
         for (const item of datas) {
-          const k = v8.serialize(item[0]).toString('base64');
+          const k = JSON.stringify(item[0]);
           let r = map[k];
           if (!r) {
             r = [item[0], createCombiner(item[1])];
@@ -349,7 +346,6 @@ export class RDD<T> {
       {
         createCombiner,
         mergeValue,
-        v8: requireModule('v8'),
       },
     );
 
@@ -358,7 +354,7 @@ export class RDD<T> {
         const ret = [];
         const map: { [key: string]: [K, C] } = {};
         for (const item of datas) {
-          const k = v8.serialize(item[0]).toString('base64');
+          const k = JSON.stringify(item[0]);
           let r = map[k];
           if (!r) {
             r = [item[0], item[1]];
@@ -372,7 +368,6 @@ export class RDD<T> {
       },
       {
         mergeCombiners,
-        v8: requireModule('v8'),
       },
     );
 

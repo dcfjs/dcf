@@ -96,6 +96,7 @@ async function releasePartition(
 
 async function createRepartitionPart() {
   const id = `tmp/part-${wid}-${++idCounter}.part`;
+  await fs.writeFile(id, Buffer.alloc(0));
   return id;
 }
 

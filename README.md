@@ -38,10 +38,12 @@ await dcc
 - [x] decompresser & compresser
 - [x] use debug module for information/error
 - [x] provide a progress bar.
-- [ ] sample
+- [ ] sampler
 - [x] sort
+- [ ] object hash(for key) method
 - [ ] storage MEMORY_OR_DISK, and use it in sort
 - [ ] storage MEMORY_SER，storage in memory but off v8 heap.
+- [ ] config default partition count.
 
 #### 0.2.x: Remote mode
 

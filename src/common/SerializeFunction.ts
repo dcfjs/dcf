@@ -58,19 +58,33 @@ export function requireModule(module: string) {
   };
 }
 
+function wrap<T extends (...args: any[]) => any>(f: T) {
+  return function(...args: any[]) {
+    try {
+      return f(...args);
+    } catch (e) {
+      console.error(`In function: ${f.toString()}`);
+      throw e;
+    }
+  };
+}
+
 export function deserialize<T extends (...args: any[]) => any>(
   f: SerializedFunction<T>,
 ): T {
   return new Function(
     'debug',
+    'wrap',
     ...f.args,
     f.functions
-      .map(v => `var ${v.name} = (function(){return ${v.source};})();\n`)
+      .map(v => `var ${v.name} = (function(){return wrap(${v.source});})();\n`)
       .join('') +
-      'return ' +
-      f.source,
+      'return wrap(' +
+      f.source +
+      ')',
   )(
     debug,
+    wrap,
     ...f.values.map(
       v =>
         v && v.__isFunction

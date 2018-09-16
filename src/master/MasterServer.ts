@@ -153,7 +153,7 @@ export class MasterServer {
           type: workerActions.CALC,
           payload: {
             in: ins[i],
-            indecies,
+            indecies: indecies[i],
             mappers,
             out: Array.isArray(out) ? out[i] : out,
           },
@@ -319,7 +319,7 @@ export class MasterServer {
     mappers: SerializedFunction<(arg: any, partitionIndex: number) => any>[],
     task: TaskDetail,
   ): Promise<any> {
-    // projection parts from [workers][newPartition] to [newPartition][workers]
+    // projection parts from [workers*unions][newPartition] to [newPartition][workers*unions]
     // and skip null parts.
     parts = new Array(numPartitions)
       .fill(0)
