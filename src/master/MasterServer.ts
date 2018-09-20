@@ -7,6 +7,7 @@ import * as workerActions from '../worker/handlers';
 import * as masterActions from './handlers';
 import debug, { setDebugFunc } from '../common/debug';
 import { processRequest } from '../common/handler';
+import concatArrays from '../common/concatArrays';
 
 type InArgs = {
   type: 'value' | 'partitions' | 'parts';
@@ -517,7 +518,7 @@ export class MasterServer {
             this.runWork(v, out, [...mappers], task),
           ),
         );
-        return ([] as any).concat(...resps);
+        return concatArrays(resps);
       }
 
       case masterActions.MAP: {
@@ -635,8 +636,8 @@ export class MasterServer {
         //   when dealing with too many same values.
         let originPartitionNum = await this.getPartitionCount(originRequest);
 
-        const samples: [any, number, number][] = ([] as any[]).concat(
-          ...(await this.runWork(
+        const samples: [any, number, number][] = concatArrays(
+          await this.runWork(
             originRequest,
             {
               type: 'reduce',
@@ -658,7 +659,7 @@ export class MasterServer {
                 },
               ),
             ],
-          )),
+          ),
         );
 
         // Step 3: sort samples, and get seperate points.

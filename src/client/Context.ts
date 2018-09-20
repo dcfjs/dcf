@@ -22,6 +22,7 @@ import {
 import { Client, Request } from './Client';
 
 import { cogroup } from './join';
+import concatArrays from '../common/concatArrays';
 
 const XXHash = require('xxhash');
 const msgpack = require('msgpack');
@@ -60,7 +61,7 @@ export class RDD<T> {
         subRequest: await this.generateTask(),
         partitionFunc: serialize((data: T[]) => data),
         finalFunc: serialize((results: T[][]) => {
-          return ([] as any).concat(...results);
+          return concatArrays(results);
         }),
       },
     });
@@ -85,7 +86,7 @@ export class RDD<T> {
               ret.push(result);
               total += result.length;
             }
-            return ([] as T[]).concat(...ret);
+            return concatArrays(ret);
           },
           { count },
         ),
@@ -190,7 +191,7 @@ export class RDD<T> {
         ),
         finalFunc: serialize(
           (result: T[][]) => {
-            const arr = ([] as T[]).concat(...result);
+            const arr = concatArrays(result);
             return arr.length > 0 ? arr.reduce(func) : null;
           },
           {
@@ -205,7 +206,7 @@ export class RDD<T> {
       func = serialize(func, env);
     }
     return this.mapPartitions(
-      (partition: T[]) => ([] as T1[]).concat(...partition.map(func)),
+      (partition: T[]) => concatArrays(partition.map(func)),
       {
         func,
       },
