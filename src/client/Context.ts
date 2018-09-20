@@ -25,6 +25,7 @@ import { cogroup } from './join';
 const concatArrays = require('../common/concatArrays').default;
 
 const XXHash = require('xxhash');
+const msgpack = require('msgpack');
 
 type ResponseFactory<T> = (rdd: RDD<T>) => Request<any> | Promise<Request<any>>;
 
@@ -32,14 +33,13 @@ function hashPartitionFunc<V>(numPartitions: number) {
   const seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
   return serialize(
     (data: V) => {
-      return (
-        XXHash.hash(Buffer.from(JSON.stringify(data)), seed) % numPartitions
-      );
+      return XXHash.hash(msgpack.pack(data), seed) % numPartitions;
     },
     {
       numPartitions,
       seed,
       XXHash: requireModule('xxhash'),
+      msgpack: requireModule('msgpack'),
     },
   );
 }
@@ -230,18 +230,23 @@ export class RDD<T> {
     return this.partitionBy(
       numPartitions,
       hashPartitionFunc<T>(numPartitions),
-    ).mapPartitions(datas => {
-      const ret = [];
-      const map: { [key: string]: T } = {};
-      for (const item of datas) {
-        const k = JSON.stringify(item);
-        if (!map[k]) {
-          map[k] = item;
-          ret.push(item);
+    ).mapPartitions(
+      datas => {
+        const ret = [];
+        const map: { [key: string]: T } = {};
+        for (const item of datas) {
+          const k = msgpack.pack(item).toString('base64');
+          if (!map[k]) {
+            map[k] = item;
+            ret.push(item);
+          }
         }
-      }
-      return ret;
-    }, {});
+        return ret;
+      },
+      {
+        msgpack: requireModule('msgpack'),
+      },
+    );
   }
   repartition(numPartitions: number): RDD<T> {
     return this.partitionBy(
@@ -336,7 +341,7 @@ export class RDD<T> {
         const ret = [];
         const map: { [key: string]: [K, C] } = {};
         for (const item of datas) {
-          const k = JSON.stringify(item[0]);
+          const k = msgpack.pack(item[0]).toString('base64');
           let r = map[k];
           if (!r) {
             r = [item[0], createCombiner(item[1])];
@@ -351,6 +356,7 @@ export class RDD<T> {
       {
         createCombiner,
         mergeValue,
+        msgpack: requireModule('msgpack'),
       },
     );
 
@@ -359,7 +365,7 @@ export class RDD<T> {
         const ret = [];
         const map: { [key: string]: [K, C] } = {};
         for (const item of datas) {
-          const k = JSON.stringify(item[0]);
+          const k = msgpack.pack(item[0]).toString('base64');
           let r = map[k];
           if (!r) {
             r = [item[0], item[1]];
@@ -373,6 +379,7 @@ export class RDD<T> {
       },
       {
         mergeCombiners,
+        msgpack: requireModule('msgpack'),
       },
     );
 
