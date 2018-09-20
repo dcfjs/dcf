@@ -22,7 +22,7 @@ import {
 import { Client, Request } from './Client';
 
 import { cogroup } from './join';
-import concatArrays from '../common/concatArrays';
+const concatArrays = require('../common/concatArrays').default;
 
 const XXHash = require('xxhash');
 
@@ -60,9 +60,12 @@ export class RDD<T> {
       payload: {
         subRequest: await this.generateTask(),
         partitionFunc: serialize((data: T[]) => data),
-        finalFunc: serialize((results: T[][]) => {
-          return concatArrays(results);
-        }),
+        finalFunc: serialize(
+          (results: T[][]) => {
+            return concatArrays(results);
+          },
+          { concatArrays },
+        ),
       },
     });
   }
@@ -88,7 +91,7 @@ export class RDD<T> {
             }
             return concatArrays(ret);
           },
-          { count },
+          { count, concatArrays },
         ),
       },
     });
@@ -196,6 +199,7 @@ export class RDD<T> {
           },
           {
             func,
+            concatArrays,
           },
         ),
       },
@@ -209,6 +213,7 @@ export class RDD<T> {
       (partition: T[]) => concatArrays(partition.map(func)),
       {
         func,
+        concatArrays,
       },
     );
   }
