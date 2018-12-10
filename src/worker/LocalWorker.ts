@@ -33,6 +33,7 @@ export class LocalWorker extends WorkerClient {
     this.worker = createWorker();
     this.worker.on('message', this.onMessage);
     this.worker.on('exit', this.onExit);
+    process.on('exit', this.onProcessExit);
     await this.processRequest({
       type: INIT,
       payload: {
@@ -84,6 +85,7 @@ export class LocalWorker extends WorkerClient {
       this.waitExit();
       this.waitExit = undefined;
     }
+    this.worker = null;
   };
   processRequest<T>(m: Request<T>): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -106,5 +108,13 @@ export class LocalWorker extends WorkerClient {
       });
     });
     this.debug('Exited successfully.');
+    process.removeListener('exit', this.onProcessExit);
   }
+  onProcessExit = () => {
+    // This is a non-gracefully case that parent process exited before worker exited, manually kill all worker
+    // while on some platform the child process will hang.
+    if (this.worker) {
+      this.worker.kill('SIGKILL');
+    }
+  };
 }
