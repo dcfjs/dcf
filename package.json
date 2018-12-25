@@ -1,6 +1,6 @@
 {
   "name": "dcf",
-  "version": "0.1.16",
+  "version": "0.1.19",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "repository": "git@github.com:tdzl2003/dcf.git",
@@ -20,12 +20,12 @@
     "typescript": "^2.9.2"
   },
   "dependencies": {
+    "@dcfjs/objpack": "^1.0.1",
     "@types/node": "^10.7.0",
     "@types/progress": "^2.0.1",
     "cross-env": "^5.2.0",
     "debug": "^3.1.0",
     "fs-promise": "^2.0.3",
-    "msgpack5": "^4.2.1",
     "progress": "^2.0.0",
     "supports-color": "^5.5.0",
     "tslib": "^1.9.3",

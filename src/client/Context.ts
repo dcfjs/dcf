@@ -25,24 +25,21 @@ import { cogroup } from './join';
 const concatArrays = require('../common/concatArrays').default;
 
 const XXHash = require('xxhash');
-const msgpack = require('msgpack5');
+const pack = require('@dcfjs/objpack');
 
 type ResponseFactory<T> = (rdd: RDD<T>) => Request<any> | Promise<Request<any>>;
 
 function hashPartitionFunc<V>(numPartitions: number) {
   const seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
-  let pack: any = null;
   return serialize(
     (data: V) => {
-      pack = pack || msgpack();
       return XXHash.hash(pack.encode(data), seed) % numPartitions;
     },
     {
       numPartitions,
       seed,
-      pack,
       XXHash: requireModule('xxhash'),
-      msgpack: requireModule('msgpack5'),
+      pack: requireModule('@dcfjs/objpack'),
     },
   );
 }
@@ -230,13 +227,11 @@ export class RDD<T> {
     });
   }
   distinct(numPartitions: number = this.context.client.workerCount()): RDD<T> {
-    let pack: any = null;
     return this.partitionBy(
       numPartitions,
       hashPartitionFunc<T>(numPartitions),
     ).mapPartitions(
       datas => {
-        pack = pack || msgpack();
         const ret = [];
         const map: { [key: string]: T } = {};
         for (const item of datas) {
@@ -249,8 +244,7 @@ export class RDD<T> {
         return ret;
       },
       {
-        pack,
-        msgpack: requireModule('msgpack5'),
+        pack: requireModule('@dcfjs/objpack'),
       },
     );
   }
@@ -341,13 +335,10 @@ export class RDD<T> {
     if (typeof partitionFunc === 'function') {
       partitionFunc = serialize(partitionFunc, env);
     }
-    let pack: any = null;
-
     const mapFunction1 = serialize(
       (datas: [K, V][]) => {
         const ret = [];
         const map: { [key: string]: [K, C] } = {};
-        pack = pack || msgpack();
         for (const item of datas) {
           const k = pack.encode(item[0]).toString('base64');
           let r = map[k];
@@ -364,8 +355,7 @@ export class RDD<T> {
       {
         createCombiner,
         mergeValue,
-        pack,
-        msgpack: requireModule('msgpack5'),
+        pack: requireModule('@dcfjs/objpack'),
       },
     );
 
@@ -373,7 +363,6 @@ export class RDD<T> {
       (datas: [K, C][]) => {
         const ret = [];
         const map: { [key: string]: [K, C] } = {};
-        pack = pack || msgpack();
         for (const item of datas) {
           const k = pack.encode(item[0]).toString('base64');
           let r = map[k];
@@ -389,8 +378,7 @@ export class RDD<T> {
       },
       {
         mergeCombiners,
-        pack,
-        msgpack: requireModule('msgpack5'),
+        pack: requireModule('@dcfjs/objpack'),
       },
     );
 
