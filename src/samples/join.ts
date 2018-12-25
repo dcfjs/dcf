@@ -12,21 +12,25 @@ async function main() {
   const dcc = new Context(client);
 
   // Create a new rdd.
-  const rdd1 = dcc.parallelize([['a', 1], ['b', 2], ['a', 3], ['d', 4]] as [
-    string,
-    number
-  ][]);
-  const rdd2 = dcc.parallelize([['a', 5], ['c', 6], ['a', 7], ['b', 8]] as [
-    string,
-    number
-  ][]);
+  const rdd1 = dcc.parallelize([
+    ['a', 1],
+    ['b', 2],
+    ['a', 3],
+    [undefined, 4],
+  ] as [string, number][]);
+  const rdd2 = dcc.parallelize([
+    ['a', 5],
+    [null, 6],
+    ['a', 7],
+    [undefined, 8],
+  ] as [string, number][]);
 
-  console.log(JSON.stringify(await rdd1.cogroup(rdd2).collect()));
+  console.log(await rdd1.cogroup(rdd2).collect());
 
-  console.log(JSON.stringify(await rdd1.join(rdd2).collect()));
-  console.log(JSON.stringify(await rdd1.leftOuterJoin(rdd2).collect()));
-  console.log(JSON.stringify(await rdd1.rightOuterJoin(rdd2).collect()));
-  console.log(JSON.stringify(await rdd1.fullOuterJoin(rdd2).collect()));
+  console.log(await rdd1.join(rdd2).collect());
+  console.log(await rdd1.leftOuterJoin(rdd2).collect());
+  console.log(await rdd1.rightOuterJoin(rdd2).collect());
+  console.log(await rdd1.fullOuterJoin(rdd2).collect());
 
   // Shutdown
   client.dispose();
