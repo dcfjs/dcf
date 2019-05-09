@@ -11,6 +11,7 @@ const isType = /\.ts$/.test(entryScript);
 function createWorker() {
   return cp.fork(entryScript, [], {
     env: process.env,
+    stdio: 'pipe',
     execArgv: isType ? ['-r', 'ts-node/register'] : [],
   });
 }
