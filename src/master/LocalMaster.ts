@@ -1,3 +1,4 @@
+import { WorkerOpts } from './../worker/LocalWorker';
 import { LocalClient } from './../client/LocalClient';
 import { Request, Response } from '../client/Client';
 import { LocalWorker } from '../worker/LocalWorker';
@@ -8,12 +9,26 @@ const fs = require('fs-promise');
 import * as fileLoader from './loaders/fileLoader';
 import debug from '../common/debug';
 
+export interface MasterOpts {
+  workerCount?: number;
+  worker?: WorkerOpts;
+}
+
+const defaultOpts: MasterOpts = {
+  workerCount: os.cpus().length,
+};
+
 export class LocalMaster extends MasterServer {
   client: LocalClient;
-  constructor(workerCount: number = os.cpus().length, client: LocalClient) {
+  opts: MasterOpts;
+  constructor(client: LocalClient, opts?: MasterOpts) {
     super();
     this.client = client;
-    this.workers = new Array(workerCount)
+    this.opts = {
+      ...defaultOpts,
+      ...opts,
+    };
+    this.workers = new Array(this.opts.workerCount)
       .fill(0)
       .map((v, i) => new LocalWorker(this, `${i}`));
     this.registerFileLoader(fileLoader);

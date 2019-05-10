@@ -1,3 +1,4 @@
+import { MasterOpts } from './../master/LocalMaster';
 import { LocalMaster } from '../master/LocalMaster';
 import { Client, Request, Response, ResponseMessage } from './Client';
 import * as os from 'os';
@@ -9,8 +10,8 @@ export class LocalClient implements Client {
   master: LocalMaster;
   progress: ProgressBar | null = null;
 
-  constructor(workerCount: number = os.cpus().length) {
-    this.master = new LocalMaster(workerCount, this);
+  constructor(opts: MasterOpts) {
+    this.master = new LocalMaster(this, opts);
   }
 
   init(): Promise<void> {

@@ -16,15 +16,28 @@ function createWorker() {
   });
 }
 
+export interface WorkerOpts {
+  nodeArgs?: string[];
+}
+
+const defaultOpts: WorkerOpts = {
+  nodeArgs: isType ? ['-r', 'ts-node/register'] : [],
+};
+
 export class LocalWorker extends WorkerClient {
   worker: cp.ChildProcess | null = null;
   sequence: Function[][] = [];
   waitExit?: Function;
   master: LocalMaster;
+  opts: WorkerOpts;
 
-  constructor(master: LocalMaster, id: string) {
+  constructor(master: LocalMaster, id: string, opts?: WorkerOpts) {
     super(id);
     this.master = master;
+    this.opts = {
+      ...defaultOpts,
+      ...opts,
+    };
   }
 
   async init(): Promise<void> {
