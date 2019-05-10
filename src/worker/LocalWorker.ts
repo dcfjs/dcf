@@ -8,16 +8,16 @@ const v8 = require('v8');
 const entryScript = require.resolve('./localEntry');
 const isType = /\.ts$/.test(entryScript);
 
-function createWorker() {
+export interface WorkerOpts {
+  nodeArgs?: string[];
+}
+
+function createWorker(opts: WorkerOpts) {
   return cp.fork(entryScript, [], {
     env: process.env,
     stdio: 'pipe',
-    execArgv: isType ? ['-r', 'ts-node/register'] : [],
+    execArgv: opts.nodeArgs || [],
   });
-}
-
-export interface WorkerOpts {
-  nodeArgs?: string[];
 }
 
 const defaultOpts: WorkerOpts = {
@@ -44,7 +44,7 @@ export class LocalWorker extends WorkerClient {
     if (this.worker != null) {
       throw new Error('Worker already inited.');
     }
-    this.worker = createWorker();
+    this.worker = createWorker(this.opts);
     this.worker.on('message', this.onMessage);
     this.worker.on('exit', this.onExit);
     process.on('exit', this.onProcessExit);

@@ -10,7 +10,7 @@ export class LocalClient implements Client {
   master: LocalMaster;
   progress: ProgressBar | null = null;
 
-  constructor(opts: MasterOpts) {
+  constructor(opts?: MasterOpts) {
     this.master = new LocalMaster(this, opts);
   }
 
