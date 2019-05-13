@@ -4,14 +4,22 @@ import { Client, Request, Response, ResponseMessage } from './Client';
 import * as os from 'os';
 import * as ProgressBar from 'progress';
 
-const showProgress = process.env['DCF_PROGRESS'] !== '0';
+const defaultOpts: MasterOpts = {
+  workerCount: os.cpus().length,
+  showProgress: true,
+};
 
 export class LocalClient implements Client {
   master: LocalMaster;
   progress: ProgressBar | null = null;
+  opts: MasterOpts;
 
   constructor(opts?: MasterOpts) {
-    this.master = new LocalMaster(this, opts);
+    this.opts = {
+      ...defaultOpts,
+      ...opts,
+    };
+    this.master = new LocalMaster(this, this.opts);
   }
 
   init(): Promise<void> {
@@ -52,7 +60,7 @@ export class LocalClient implements Client {
         if (this.progress) {
           this.progress.terminate();
         }
-        if (showProgress) {
+        if (this.opts.showProgress) {
           this.progress = new ProgressBar(
             `Task ${m.taskIndex}/${
               m.tasks

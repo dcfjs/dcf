@@ -12,22 +12,16 @@ import debug from '../common/debug';
 export interface MasterOpts {
   workerCount?: number;
   worker?: WorkerOpts;
+  showProgress?: boolean;
 }
-
-const defaultOpts: MasterOpts = {
-  workerCount: os.cpus().length,
-};
 
 export class LocalMaster extends MasterServer {
   client: LocalClient;
   opts: MasterOpts;
-  constructor(client: LocalClient, opts?: MasterOpts) {
+  constructor(client: LocalClient, opts: MasterOpts) {
     super();
     this.client = client;
-    this.opts = {
-      ...defaultOpts,
-      ...opts,
-    };
+    this.opts = opts;
     this.workers = new Array(this.opts.workerCount)
       .fill(0)
       .map((v, i) => new LocalWorker(this, `${i}`));

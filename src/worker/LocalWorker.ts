@@ -15,7 +15,7 @@ export interface WorkerOpts {
 function createWorker(opts: WorkerOpts) {
   return cp.fork(entryScript, [], {
     env: process.env,
-    stdio: 'pipe',
+    stdio: 'inherit',
     execArgv: opts.nodeArgs || [],
   });
 }
