@@ -69,6 +69,17 @@ function wrap<T extends (...args: any[]) => any>(f: T) {
   };
 }
 
+let requireWhiteList: { [key: string]: 1 } | undefined;
+
+function safeRequire(m: string): any {
+  if (requireWhiteList && !requireWhiteList[m]) {
+    throw new Error(
+      `Module ${m} is forbidden for required, please contact your administrator.`,
+    );
+  }
+  return require(m);
+}
+
 export function deserialize<T extends (...args: any[]) => any>(
   f: SerializedFunction<T>,
 ): T {
@@ -85,13 +96,19 @@ export function deserialize<T extends (...args: any[]) => any>(
   )(
     debug,
     wrap,
-    ...f.values.map(
-      v =>
-        v && v.__isFunction
-          ? deserialize(v)
-          : v && v.__isRequire
-            ? require(v.module)
-            : v,
+    ...f.values.map(v =>
+      v && v.__isFunction
+        ? deserialize(v)
+        : v && v.__isRequire
+        ? safeRequire(v.module)
+        : v,
     ),
   );
+}
+
+export function setRequireWhiteList(whiteList: string[]) {
+  requireWhiteList = {};
+  for (const mod of whiteList) {
+    requireWhiteList[mod] = 1;
+  }
 }

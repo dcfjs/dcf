@@ -9,6 +9,7 @@ const entryScript = require.resolve('./localEntry');
 const isType = /\.ts$/.test(entryScript);
 
 export interface WorkerOpts {
+  requireWhiteList?: string[];
   nodeArgs?: string[];
 }
 
@@ -53,6 +54,7 @@ export class LocalWorker extends WorkerClient {
       payload: {
         id: this.id,
         mode: 'local',
+        requireWhiteList: this.opts.requireWhiteList,
       },
     });
   }

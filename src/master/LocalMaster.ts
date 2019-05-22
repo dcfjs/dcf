@@ -8,11 +8,13 @@ import { MasterServer } from './MasterServer';
 const fs = require('fs-promise');
 import * as fileLoader from './loaders/fileLoader';
 import debug from '../common/debug';
+import { setRequireWhiteList } from '../common/SerializeFunction';
 
 export interface MasterOpts {
   workerCount?: number;
   worker?: WorkerOpts;
   showProgress?: boolean;
+  requireWhiteList?: string[];
 }
 
 export class LocalMaster extends MasterServer {
@@ -22,10 +24,17 @@ export class LocalMaster extends MasterServer {
     super();
     this.client = client;
     this.opts = opts;
-    this.workers = new Array(this.opts.workerCount)
-      .fill(0)
-      .map((v, i) => new LocalWorker(this, `${i}`));
+    this.workers = new Array(this.opts.workerCount).fill(0).map(
+      (v, i) =>
+        new LocalWorker(this, `${i}`, {
+          requireWhiteList: opts.requireWhiteList,
+          ...opts.worker,
+        }),
+    );
     this.registerFileLoader(fileLoader);
+    if (opts.requireWhiteList) {
+      setRequireWhiteList(opts.requireWhiteList);
+    }
   }
   send(m: Response) {
     this.client.processMessage(m);

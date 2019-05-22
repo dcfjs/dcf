@@ -1,4 +1,8 @@
-import { SerializedFunction, deserialize } from '../common/SerializeFunction';
+import {
+  SerializedFunction,
+  deserialize,
+  setRequireWhiteList,
+} from '../common/SerializeFunction';
 import { registerHandler } from '../common/handler';
 import { StorageType } from '../common/types';
 import debug from '../common/debug';
@@ -29,9 +33,21 @@ let mode: WorkerMode = 'local';
 
 registerHandler(
   INIT,
-  ({ id, mode: _mode }: { id: string; mode: WorkerMode }) => {
+  ({
+    id,
+    mode: _mode,
+    requireWhiteList,
+  }: {
+    id: string;
+    mode: WorkerMode;
+    requireWhiteList?: string[];
+  }) => {
     wid = id;
     mode = _mode;
+    if (requireWhiteList) {
+      setRequireWhiteList(requireWhiteList);
+    }
+
     debug(`Worker inited.`);
   },
 );
