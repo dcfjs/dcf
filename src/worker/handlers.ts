@@ -8,6 +8,7 @@ import { StorageType } from '../common/types';
 import debug from '../common/debug';
 import WorkerContext from './WorkerContext';
 import concatArrays from '../common/concatArrays';
+import getTmpFolderPath from '../common/getTmpFolderPath';
 
 const fs = require('fs-promise');
 const v8 = require('v8');
@@ -64,7 +65,7 @@ async function saveNewPartition<T>(storageType: StorageType, data: T[]) {
   switch (storageType) {
     case 'disk': {
       const buf = v8.serialize(data);
-      await fs.writeFile(`tmp/${wid}-${id}.partition`, buf);
+      await fs.writeFile(`${getTmpFolderPath()}/${wid}-${id}.partition`, buf);
       break;
     }
     case 'memory':
@@ -82,7 +83,7 @@ async function getPartitionData<T>(
 ): Promise<T[]> {
   switch (storageType) {
     case 'disk': {
-      const buf = await fs.readFile(`tmp/${wid}-${id}.partition`);
+      const buf = await fs.readFile(`${getTmpFolderPath()}/${wid}-${id}.partition`);
       return v8.deserialize(buf);
     }
     case 'memory':
@@ -98,7 +99,7 @@ async function releasePartition(
 ): Promise<void> {
   switch (storageType) {
     case 'disk': {
-      await fs.unlink(`tmp/${wid}-${id}.partition`);
+      await fs.unlink(`${getTmpFolderPath()}/${wid}-${id}.partition`);
       break;
     }
     case 'memory': {
@@ -111,7 +112,7 @@ async function releasePartition(
 }
 
 async function createRepartitionPart() {
-  const id = `tmp/part-${wid}-${++idCounter}.part`;
+  const id = `${getTmpFolderPath()}/part-${wid}-${++idCounter}.part`;
   await fs.writeFile(id, Buffer.alloc(0));
   return id;
 }
