@@ -9,6 +9,7 @@ const fs = require('fs-promise');
 import * as fileLoader from './loaders/fileLoader';
 import debug from '../common/debug';
 import { setRequireWhiteList } from '../common/SerializeFunction';
+import getTmpFolderPath from '../common/getTmpFolderPath';
 
 export interface MasterOpts {
   workerCount?: number;
@@ -43,7 +44,7 @@ export class LocalMaster extends MasterServer {
     super.init();
     debug('Launching workers.');
     try {
-      await fs.mkdirs('tmp');
+      await fs.mkdirs(getTmpFolderPath());
     } catch (e) {}
     await Promise.all(this.workers.map(v => v.init()));
     debug('Master ready.');
@@ -51,12 +52,13 @@ export class LocalMaster extends MasterServer {
   async dispose(): Promise<void> {
     super.dispose();
     await Promise.all(this.workers.map(v => v.dispose()));
+    const tmpFolderPath = getTmpFolderPath();
     try {
-      const files = await fs.readdir('tmp');
+      const files = await fs.readdir(tmpFolderPath);
       for (const file of files) {
-        await fs.unlink(`tmp/${file}`);
+        await fs.unlink(`${tmpFolderPath}/${file}`);
       }
-      await fs.rmdir('tmp');
+      await fs.rmdir(tmpFolderPath);
     } catch (e) {}
     debug('Bye.');
   }
