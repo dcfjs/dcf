@@ -29,6 +29,6 @@
     "progress": "^2.0.0",
     "supports-color": "^5.5.0",
     "tslib": "^1.9.3",
-    "xxhash": "^0.2.4"
+    "xxhash-addon": "^2.0.3"
   }
 }
