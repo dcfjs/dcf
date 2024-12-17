@@ -30,14 +30,12 @@ const pack = require('@dcfjs/objpack');
 type ResponseFactory<T> = (rdd: RDD<T>) => Request<any> | Promise<Request<any>>;
 
 function hashPartitionFunc<V>(numPartitions: number) {
-  const seed = ((Math.random() * 0xffffffff) | 0) >>> 0;
   return serialize(
     (data: V) => {
-      return xxhash.XXHash32.hash(pack.encode(data), seed) % numPartitions;
+      return xxhash.XXHash32.hash(pack.encode(data)).readIntLE(0,4) % numPartitions;
     },
     {
       numPartitions,
-      seed,
       xxhash: requireModule('xxhash-addon'),
       pack: requireModule('@dcfjs/objpack'),
     },
