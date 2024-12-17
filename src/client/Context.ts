@@ -32,7 +32,7 @@ type ResponseFactory<T> = (rdd: RDD<T>) => Request<any> | Promise<Request<any>>;
 function hashPartitionFunc<V>(numPartitions: number) {
   return serialize(
     (data: V) => {
-      return xxhash.XXHash32.hash(pack.encode(data)).readIntLE(0,4) % numPartitions;
+      return xxhash.XXHash32.hash(pack.encode(data)).readUInt32LE(0,4) % numPartitions;
     },
     {
       numPartitions,
