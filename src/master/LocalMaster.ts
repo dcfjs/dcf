@@ -41,7 +41,7 @@ export class LocalMaster extends MasterServer {
     this.client.processMessage(m);
   }
   async init(): Promise<void> {
-    super.init();
+    await super.init();
     debug('Launching workers.');
     try {
       await fs.mkdirs(getTmpFolderPath());
@@ -50,7 +50,7 @@ export class LocalMaster extends MasterServer {
     debug('Master ready.');
   }
   async dispose(): Promise<void> {
-    super.dispose();
+    await super.dispose();
     await Promise.all(this.workers.map(v => v.dispose()));
     const tmpFolderPath = getTmpFolderPath();
     try {
